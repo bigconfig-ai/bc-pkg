@@ -14,6 +14,7 @@ const { pipeline } = require('stream/promises');
 // Pinned, known-good versions. Overridable via env.
 const DEFAULT_BB_VERSION = process.env.BB_VERSION || '1.12.196';
 const DEFAULT_JDK_VERSION = process.env.JDK_VERSION || '21';
+const REWRITE_EDN_VERSION = process.env.REWRITE_EDN_VERSION || '0.5.9';
 
 const TAG = '[@bigconfig/bb]';
 
@@ -349,9 +350,10 @@ function ensureGit() {
   }
 }
 
-// --- Run bb --------------------------------------------------------------
+// --- bb.edn bootstrap ----------------------------------------------------
 
-function runBb(bbPath, args, javaHome) {
+// Env augmented so the spawned bb finds the cached JDK; nothing system-wide.
+function bbEnv(javaHome) {
   const env = { ...process.env };
   if (javaHome) {
     env.JAVA_HOME = javaHome;
@@ -360,6 +362,147 @@ function runBb(bbPath, args, javaHome) {
       path.delimiter +
       (process.env.PATH || '');
   }
+  return env;
+}
+
+function ghFetch(url, accept) {
+  const headers = {
+    'user-agent': '@bigconfig/bb',
+    accept: accept || 'application/vnd.github+json',
+    'x-github-api-version': '2022-11-28',
+  };
+  if (process.env.GITHUB_TOKEN) {
+    headers.authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
+  }
+  return fetch(url, { headers, redirect: 'follow' });
+}
+
+// Reads/edits the EDN with borkdude/rewrite-edn so comments & formatting of
+// untouched nodes survive. Params are passed via env to avoid quoting issues.
+const REWRITE_SCRIPT = `(require '[babashka.deps :as deps])
+(deps/add-deps {:deps {'borkdude/rewrite-edn {:mvn/version (System/getenv "BBEDN_REWRITE_VERSION")}}})
+(require '[borkdude.rewrite-edn :as r])
+
+(defn local-root? [coord]
+  (and (map? coord) (contains? coord :local/root)))
+
+;; Drop every entry whose effective coord (sexpr respects #_ discard) is a
+;; map containing :local/root. Returns the (possibly unchanged) map node.
+(defn strip-local-root [m-node]
+  (if (nil? m-node)
+    m-node
+    (let [m (r/sexpr m-node)]
+      (reduce (fn [acc k]
+                (if (local-root? (get m k)) (r/dissoc acc k) acc))
+              m-node
+              (keys m)))))
+
+(let [in    (System/getenv "BBEDN_IN")
+      out   (System/getenv "BBEDN_OUT")
+      owner (System/getenv "BBEDN_OWNER")
+      proj  (System/getenv "BBEDN_PROJECT")
+      sha   (System/getenv "BBEDN_SHA")
+      dep   (symbol (str "io.github." owner) proj)
+      nodes (r/parse-string (slurp in))
+      ;; 1. strip :local/root from top-level :deps
+      nodes (if (r/get nodes :deps)
+              (r/update nodes :deps strip-local-root)
+              nodes)
+      ;; 2. strip :local/root from each task's :extra-deps
+      tasks (some-> (r/get nodes :tasks) r/sexpr)
+      nodes (reduce (fn [acc tk]
+                      (let [tv (get tasks tk)]
+                        (if (and (map? tv) (map? (:extra-deps tv)))
+                          (r/update-in acc [:tasks tk :extra-deps] strip-local-root)
+                          acc)))
+                    nodes
+                    (keys tasks))
+      ;; 3. ensure :deps exists, then inject the repo as a git dep
+      nodes (if (nil? (r/get nodes :deps)) (r/assoc nodes :deps {}) nodes)
+      nodes (r/assoc-in nodes [:deps dep] {:git/sha sha})]
+  (spit out (str nodes)))
+`;
+
+// When the cwd has no bb.edn and BB_EDN_REPO=owner/project is set, fetch that
+// repo's bb.edn (pinned to its default-branch HEAD) and add the repo itself
+// as an io.github git dep. Disabled (skipped) if the env var is unset.
+async function ensureBbEdn(bbPath, javaHome) {
+  const repo = process.env.BB_EDN_REPO;
+  if (!repo) return; // step disabled — proceed straight to bb
+  const target = path.join(process.cwd(), 'bb.edn');
+  if (fs.existsSync(target)) return; // already present — leave it alone
+
+  const m = repo.trim().match(/^([^/\s@]+)\/([^/\s@]+)$/);
+  if (!m) {
+    throw new Error(`BB_EDN_REPO must be "owner/project" (got "${repo}")`);
+  }
+  const [, owner, project] = m;
+  const slug = `${owner}/${project}`;
+  const api = `https://api.github.com/repos/${owner}/${project}`;
+
+  const cr = await ghFetch(`${api}/commits?per_page=1`);
+  if (cr.status === 404) {
+    throw new Error(
+      `BB_EDN_REPO: ${slug} not found or not accessible ` +
+        `(set GITHUB_TOKEN for private repos)`
+    );
+  }
+  if (!cr.ok) {
+    throw new Error(`GitHub API error ${cr.status} resolving ${slug}`);
+  }
+  const commits = await cr.json();
+  const sha = Array.isArray(commits) && commits[0] && commits[0].sha;
+  if (!sha) throw new Error(`${slug} has no commits`);
+
+  const fr = await ghFetch(
+    `${api}/contents/bb.edn?ref=${sha}`,
+    'application/vnd.github.raw'
+  );
+  if (fr.status === 404) {
+    throw new Error(`${slug} (at ${sha.slice(0, 7)}) has no bb.edn`);
+  }
+  if (!fr.ok) {
+    throw new Error(`GitHub API error ${fr.status} fetching bb.edn from ${slug}`);
+  }
+  const ednText = await fr.text();
+
+  log(`Bootstrapping bb.edn from ${slug}@${sha.slice(0, 7)}...`);
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'bb-edn-'));
+  try {
+    const inFile = path.join(tmp, 'in.edn');
+    const script = path.join(tmp, 'rewrite.clj');
+    fs.writeFileSync(inFile, ednText);
+    fs.writeFileSync(script, REWRITE_SCRIPT);
+    const env = bbEnv(javaHome);
+    Object.assign(env, {
+      BBEDN_IN: inFile,
+      BBEDN_OUT: target,
+      BBEDN_OWNER: owner,
+      BBEDN_PROJECT: project,
+      BBEDN_SHA: sha,
+      BBEDN_REWRITE_VERSION: REWRITE_EDN_VERSION,
+    });
+    const r = spawnSync(bbPath, [script], {
+      stdio: ['ignore', 'ignore', 'inherit'],
+      cwd: process.cwd(),
+      env,
+    });
+    if (r.error || r.status !== 0) {
+      const why = r.error ? r.error.message : `exit ${r.status}`;
+      throw new Error(`failed to write bb.edn via rewrite-edn (${why})`);
+    }
+    if (!fs.existsSync(target)) {
+      throw new Error('rewrite-edn step did not produce a bb.edn');
+    }
+  } finally {
+    rmrf(tmp);
+  }
+}
+
+// --- Run bb --------------------------------------------------------------
+
+function runBb(bbPath, args, javaHome) {
+  const env = bbEnv(javaHome);
 
   const child = spawn(bbPath, args, {
     stdio: 'inherit',
@@ -393,6 +536,7 @@ async function main(args) {
   const bbPath = await ensureBabashka(p);
   const javaHome = await ensureJdk(p);
   ensureGit();
+  await ensureBbEdn(bbPath, javaHome);
   const code = await runBb(bbPath, args, javaHome);
   process.exit(code);
 }
@@ -405,4 +549,10 @@ if (require.main === module) {
 }
 
 // Exported for tests / inspection.
-module.exports = { resolvePlatform, cacheRoot, findJavaHome, ensureGit };
+module.exports = {
+  resolvePlatform,
+  cacheRoot,
+  findJavaHome,
+  ensureGit,
+  ensureBbEdn,
+};

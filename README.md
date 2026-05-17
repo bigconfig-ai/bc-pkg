@@ -37,6 +37,27 @@ and may prompt for a sudo password; in non-interactive environments without
 passwordless sudo it will fail with an actionable message — pre-install git to
 avoid this entirely.
 
+## bb.edn bootstrap (optional)
+
+If the current directory has **no `bb.edn`** and `BB_EDN_REPO=owner/project`
+is set, that repo's `bb.edn` is downloaded (pinned to its default branch's
+latest commit) and the repo itself is added to `:deps` as
+`io.github.<owner>/<project> {:git/sha "<sha>"}`. The edit is done with
+`borkdude/rewrite-edn`, so existing comments and formatting are preserved.
+
+Any dependency using `:local/root` (in `:deps` or a task's `:extra-deps`) is
+removed first, since those paths don't exist once the file is downloaded.
+Valid Maven/git deps are kept.
+
+- Skipped entirely if `BB_EDN_REPO` is unset or a `bb.edn` already exists.
+- Fatal error if the repo is missing/inaccessible or has no `bb.edn`.
+- Set `GITHUB_TOKEN` for private repos or to avoid GitHub's unauthenticated
+  API rate limit.
+
+```sh
+BB_EDN_REPO=my-org/shared-tasks npx @bigconfig/bb tasks
+```
+
 ## Cache location
 
 A single shared directory, reused across all projects:
@@ -50,10 +71,13 @@ Delete that directory to force a clean reinstall.
 
 ## Configuration
 
-| Env var       | Default    | Effect                                  |
-| ------------- | ---------- | --------------------------------------- |
-| `BB_VERSION`  | `1.12.196` | babashka release version to install     |
-| `JDK_VERSION` | `21`       | Temurin feature version (e.g. `17`, `21`, `25`) |
+| Env var               | Default    | Effect                                          |
+| --------------------- | ---------- | ----------------------------------------------- |
+| `BB_VERSION`          | `1.12.196` | babashka release version to install             |
+| `JDK_VERSION`         | `21`       | Temurin feature version (e.g. `17`, `21`, `25`) |
+| `BB_EDN_REPO`         | _(unset)_  | `owner/project` to bootstrap a `bb.edn` from (see below) |
+| `GITHUB_TOKEN`        | _(unset)_  | Used for `BB_EDN_REPO` (private repos / higher API rate limit) |
+| `REWRITE_EDN_VERSION` | `0.5.9`    | `borkdude/rewrite-edn` version used to edit the `bb.edn` |
 
 ## Supported platforms
 

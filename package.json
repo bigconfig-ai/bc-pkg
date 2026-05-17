@@ -1,24 +1,15 @@
 {
-  "name": "@bigconfig/bb",
-  "version": "0.1.0",
-  "description": "Bootstrap and run babashka (bb): installs babashka and a Temurin JDK on first use if missing, then forwards all arguments to bb.",
-  "bin": {
-    "bb": "bin/bb.js"
-  },
-  "files": [
-    "bin/",
-    "README.md"
-  ],
-  "engines": {
-    "node": ">=18"
-  },
-  "keywords": [
-    "babashka",
-    "bb",
-    "clojure",
-    "jdk",
-    "cli"
-  ],
-  "license": "MIT",
-  "type": "commonjs"
+    "name": "@bigconfig/bb",
+    "version": "0.2.0",
+    "description": "Bootstrap and run babashka (bb): installs babashka and a Temurin JDK on first use if missing, then forwards all arguments to bb.",
+    "bin": {
+        "bb": "bin/bb.js"
+    },
+    "files": ["bin/", "README.md"],
+    "engines": {
+        "node": ">=18"
+    },
+    "keywords": ["babashka", "bb", "clojure", "jdk", "cli"],
+    "license": "MIT",
+    "type": "commonjs"
 }
