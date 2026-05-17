@@ -6,11 +6,13 @@ ARG USER_ID=1000
 ARG GROUP_ID=1000
 ARG NODE_MAJOR=24
 
-# Install Node.js and the pi.dev coding agent.
+# Install Node.js, ripgrep, fd, and the pi.dev coding agent.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates \
         curl \
+        fd-find \
         gnupg \
+        ripgrep \
         sudo \
     && install -d -m 0755 /etc/apt/keyrings \
     && curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key \
@@ -19,6 +21,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         > /etc/apt/sources.list.d/nodesource.list \
     && apt-get update \
     && apt-get install -y --no-install-recommends nodejs \
+    && ln -sf /usr/bin/fdfind /usr/local/bin/fd \
     && npm install -g @earendil-works/pi-coding-agent \
     && rm -rf /var/lib/apt/lists/*
 
