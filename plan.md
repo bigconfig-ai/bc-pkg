@@ -1,0 +1,59 @@
+# Goal
+
+Create a node package that bootstraps and runs babashka (`bb`), installing
+babashka and a JDK on first use if they are missing.
+
+# Usage
+
+```
+npx @bigconfig/bb tasks      ->  bb tasks
+npx @bigconfig/bb <args...>  ->  bb <args...>
+```
+
+All arguments (including flags) are passed through verbatim. `bb` runs in the
+caller's current working directory (so it picks up the local `bb.edn`).
+
+# Resolved decisions
+
+- **Package name:** `@bigconfig/bb` (scoped). Single bin = passthrough launcher.
+- **Babashka install:** download the platform-specific archive directly from
+  babashka's GitHub releases (no curl/bash/brew dependency).
+- **JDK install:** also bootstrap a JDK — Eclipse Temurin **21 (LTS)** via the
+  Adoptium API.
+- **Versioning:** pin known-good `bb` + JDK versions in the package; allow
+  `BB_VERSION` / `JDK_VERSION` env overrides.
+- **Timing:** lazy — download on first invocation, not on `npm install`.
+- **Cache:** shared user cache dir, reused across projects
+  (`$XDG_CACHE_HOME` / `~/.cache` / `%LOCALAPPDATA%` → `bigconfig-bb/`).
+- **JDK exposure:** `JAVA_HOME` + `PATH` set only for the spawned `bb`
+  process; nothing modified system-wide.
+- **Platforms:** macOS arm64, macOS x64, Linux x64, Linux arm64, Windows x64.
+- **git (Linux only):** if `git` is missing on Linux, install it via the
+  system package manager (apt-get/dnf/yum/zypper/pacman/apk) using sudo when
+  not root. Skipped if git is present; no-op on macOS/Windows.
+- **Implementation:** plain JS single-file CLI, no TypeScript build step.
+
+# Behavior on invocation
+
+1. Resolve target OS/arch; map to babashka + Temurin asset names.
+2. If cached `bb` for the pinned version is missing → download + extract to
+   cache.
+3. If cached JDK for the pinned version is missing → download + extract to
+   cache.
+4. On Linux only: if `git` is not on PATH, install it via the system package
+   manager (sudo when not root).
+5. Spawn `bb` with the user's args, cwd = process cwd, env augmented with
+   `JAVA_HOME` and `PATH` pointing at the cached JDK. Forward stdio; exit with
+   bb's exit code.
+
+# Asset resolution (reference)
+
+- **Babashka:** `github.com/babashka/babashka/releases/download/v<ver>/`
+  `babashka-<ver>-{macos|linux|windows}-{aarch64|amd64}.{tar.gz|zip}`
+- **JDK (Adoptium v3):**
+  `https://api.adoptium.net/v3/binary/latest/21/ga/{mac|linux|windows}/{aarch64|x64}/jdk/hotspot/normal/eclipse`
+
+# Open / optional hardening
+
+- Verify downloaded archive checksums (babashka `.sha256`, Adoptium checksum).
+- Concurrency lock so parallel first-runs don't race on the same cache dir.
