@@ -1,0 +1,655 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>@bigconfig/bb — Manual</title>
+<link rel="icon" type="image/svg+xml"
+      href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3E%3Crect%20width='64'%20height='64'%20rx='12'%20fill='%232f6feb'/%3E%3Ctext%20x='32'%20y='45'%20font-size='34'%20font-family='monospace'%20font-weight='700'%20text-anchor='middle'%20fill='white'%3Ebb%3C/text%3E%3C/svg%3E" />
+<style>
+  :root {
+    --bg: #ffffff;
+    --bg-soft: #f7f8fa;
+    --bg-code: #f5f6f8;
+    --text: #1f2328;
+    --text-muted: #57606a;
+    --border: #d0d7de;
+    --border-soft: #eaeef2;
+    --accent: #2f6feb;
+    --accent-soft: #ddebff;
+    --warn: #9a6700;
+    --danger: #cf222e;
+    --kbd-bg: #f6f8fa;
+    --maxw-content: 820px;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; scroll-padding-top: 16px; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code, pre, kbd, samp {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    font-size: 13px;
+  }
+  code {
+    background: var(--bg-code);
+    padding: 1px 5px;
+    border-radius: 4px;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+  pre { margin: 14px 0; }
+  pre code {
+    display: block;
+    padding: 14px 16px;
+    border: 1px solid var(--border-soft);
+    border-radius: 6px;
+    background: var(--bg-soft);
+    overflow-x: auto;
+    overflow-wrap: normal;
+    white-space: pre;
+    word-break: normal;
+    line-height: 1.5;
+  }
+  kbd {
+    background: var(--kbd-bg);
+    border: 1px solid var(--border);
+    border-bottom-width: 2px;
+    border-radius: 4px;
+    padding: 1px 5px;
+  }
+  hr { border: 0; border-top: 1px solid var(--border-soft); margin: 32px 0; }
+
+  /* layout */
+  .layout {
+    display: grid;
+    grid-template-columns: 280px minmax(0, 1fr);
+    min-height: 100vh;
+  }
+  aside.sidebar {
+    position: sticky;
+    top: 0;
+    align-self: start;
+    height: 100vh;
+    overflow-y: auto;
+    border-right: 1px solid var(--border-soft);
+    background: var(--bg-soft);
+    padding: 24px 18px;
+  }
+  .sidebar .brand {
+    display: block;
+    color: var(--text);
+    font-weight: 700;
+    font-size: 17px;
+    letter-spacing: -0.01em;
+    padding: 0 6px 10px;
+    border-bottom: 1px solid var(--border-soft);
+    margin-bottom: 10px;
+    text-decoration: none;
+  }
+  .sidebar .brand:hover { text-decoration: none; }
+  .sidebar .brand small {
+    display: block;
+    font-weight: 400;
+    color: var(--text-muted);
+    font-size: 12px;
+    margin-top: 2px;
+  }
+  .sidebar nav ul {
+    list-style: none;
+    padding: 0;
+    margin: 6px 0 14px;
+  }
+  .sidebar nav .group-title {
+    color: var(--text-muted);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin: 14px 6px 4px;
+  }
+  .sidebar nav li a {
+    display: block;
+    color: var(--text-muted);
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 13.5px;
+  }
+  .sidebar nav li a:hover {
+    color: var(--text);
+    background: var(--accent-soft);
+    text-decoration: none;
+  }
+  .sidebar nav li a.active {
+    color: var(--accent);
+    background: var(--accent-soft);
+    font-weight: 600;
+  }
+
+  main {
+    padding: 40px 48px 96px;
+    max-width: calc(var(--maxw-content) + 96px);
+  }
+  main h1 {
+    font-size: 30px;
+    letter-spacing: -0.02em;
+    margin: 0 0 6px;
+  }
+  p.tagline {
+    color: var(--text-muted);
+    font-size: 16px;
+    margin: 0 0 8px;
+    max-width: var(--maxw-content);
+  }
+  section { margin-top: 36px; max-width: var(--maxw-content); }
+  h2 {
+    font-size: 21px;
+    letter-spacing: -0.01em;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border-soft);
+    margin: 0 0 14px;
+  }
+  h3 { font-size: 16px; margin: 22px 0 8px; }
+  h4 { font-size: 14px; margin: 0 0 4px; }
+  p, li { max-width: var(--maxw-content); }
+  .anchor {
+    color: var(--border);
+    font-weight: 400;
+    margin-left: 6px;
+    opacity: 0;
+    transition: opacity .12s;
+  }
+  h2:hover .anchor { opacity: 1; }
+
+  .grid-2 {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    margin: 16px 0;
+  }
+  .card {
+    border: 1px solid var(--border-soft);
+    border-radius: 8px;
+    padding: 12px 14px;
+    background: var(--bg-soft);
+  }
+  .card h4 { color: var(--accent); }
+  .card p { margin: 4px 0 0; color: var(--text-muted); font-size: 13.5px; }
+
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 14px 0;
+    font-size: 13.5px;
+  }
+  th, td {
+    border: 1px solid var(--border-soft);
+    padding: 7px 10px;
+    text-align: left;
+    vertical-align: top;
+  }
+  th { background: var(--bg-soft); font-weight: 600; }
+
+  .note, .warn {
+    border: 1px solid var(--border-soft);
+    border-left: 3px solid var(--accent);
+    background: var(--bg-soft);
+    border-radius: 6px;
+    padding: 10px 14px;
+    margin: 14px 0;
+    font-size: 14px;
+  }
+  .warn { border-left-color: var(--warn); }
+  .note p, .warn p { margin: 6px 0; }
+
+  details {
+    border: 1px solid var(--border-soft);
+    border-radius: 6px;
+    padding: 8px 14px;
+    margin: 8px 0;
+    background: var(--bg-soft);
+  }
+  details summary { cursor: pointer; }
+  dl dt { margin-top: 12px; }
+  dl dd { margin: 2px 0 0 16px; color: var(--text-muted); }
+
+  footer.page {
+    color: var(--text-muted);
+    font-size: 13px;
+    max-width: var(--maxw-content);
+  }
+
+  @media (max-width: 860px) {
+    .layout { grid-template-columns: 1fr; }
+    aside.sidebar { position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--border-soft); }
+    main { padding: 28px 20px 64px; }
+    .grid-2 { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+
+<aside class="sidebar">
+  <a class="brand" href="https://www.bigconfig.ai/">
+    ← BigConfig
+    <small>npx launcher for babashka (bb)</small>
+  </a>
+  <nav id="toc">
+    <div class="group-title">Start</div>
+    <ul>
+      <li><a href="#overview">Overview</a></li>
+      <li><a href="#why">Why @bigconfig/bb</a></li>
+      <li><a href="#install">Installation &amp; usage</a></li>
+      <li><a href="#quickstart">Quick start</a></li>
+    </ul>
+    <div class="group-title">Core</div>
+    <ul>
+      <li><a href="#how">How it works</a></li>
+      <li><a href="#babashka">Babashka install</a></li>
+      <li><a href="#jdk">JDK install</a></li>
+      <li><a href="#git">Git (Linux)</a></li>
+      <li><a href="#bbedn">bb.edn bootstrap</a></li>
+      <li><a href="#localroot">:local/root stripping</a></li>
+    </ul>
+    <div class="group-title">Reference</div>
+    <ul>
+      <li><a href="#env">Environment variables</a></li>
+      <li><a href="#platforms">Supported platforms</a></li>
+      <li><a href="#cache">Cache layout</a></li>
+      <li><a href="#passthrough">Passthrough &amp; exit codes</a></li>
+    </ul>
+    <div class="group-title">Examples</div>
+    <ul>
+      <li><a href="#ex-local">Local bootstrap</a></li>
+      <li><a href="#ex-docker">Docker</a></li>
+      <li><a href="#ex-docker-validate">Docker + task</a></li>
+      <li><a href="#ex-bbedn">BB_EDN_REPO explained</a></li>
+    </ul>
+    <div class="group-title">Project</div>
+    <ul>
+      <li><a href="#requirements">Requirements</a></li>
+      <li><a href="#caveats">Caveats</a></li>
+      <li><a href="#changelog">Changelog</a></li>
+      <li><a href="#glossary">Glossary</a></li>
+    </ul>
+  </nav>
+</aside>
+
+<main>
+
+<h1>@bigconfig/bb</h1>
+<p class="tagline">
+  An <code>npx</code> launcher that bootstraps babashka, a Temurin JDK, git (on
+  Linux), and an optional <code>bb.edn</code> on first use — then forwards every
+  argument to <code>bb</code>. Zero install:
+  <code>npx @bigconfig/bb tasks</code> becomes <code>bb tasks</code>.
+</p>
+
+<section id="overview">
+<h2>Overview <a href="#overview" class="anchor">#</a></h2>
+<p>
+  <code>@bigconfig/bb</code> is a tiny, single-file Node CLI. It resolves the
+  host OS/CPU, downloads pinned, known-good binaries into a shared user cache
+  on first run, optionally bootstraps a <code>bb.edn</code> from GitHub, and
+  then execs <code>bb</code> with your arguments. Nothing is changed
+  system-wide; subsequent runs reuse the cache and start immediately.
+</p>
+<div class="grid-2">
+  <div class="card"><h4>Babashka</h4><p>Downloaded from babashka's GitHub releases for the host platform.</p></div>
+  <div class="card"><h4>JDK</h4><p>Eclipse Temurin via the Adoptium API; wired into the bb subprocess only.</p></div>
+  <div class="card"><h4>Git (Linux)</h4><p>Installed via the system package manager if missing; no-op elsewhere.</p></div>
+  <div class="card"><h4>bb.edn bootstrap</h4><p>Optionally fetch a project's <code>bb.edn</code> from a GitHub repo.</p></div>
+  <div class="card"><h4>:local/root strip</h4><p>Invalid local-path deps removed; the repo added as a pinned git dep.</p></div>
+  <div class="card"><h4>Cached &amp; lazy</h4><p>One shared cache, race-safe atomic installs, reused across projects.</p></div>
+</div>
+</section>
+
+<section id="why">
+<h2>Why @bigconfig/bb <a href="#why" class="anchor">#</a></h2>
+<ul>
+  <li><strong>Zero install:</strong> one <code>npx</code> command — no manual babashka/JDK setup.</li>
+  <li><strong>Reproducible:</strong> babashka, JDK and rewrite-edn versions are pinned and overridable via env.</li>
+  <li><strong>CI / Docker friendly:</strong> works in a bare <code>node</code> container; first run hydrates the cache.</li>
+  <li><strong>No system changes:</strong> <code>JAVA_HOME</code>/<code>PATH</code> are scoped to the spawned <code>bb</code> only.</li>
+  <li><strong>Project bootstrap:</strong> <code>BB_EDN_REPO</code> turns any GitHub repo with a <code>bb.edn</code> into a runnable task set.</li>
+</ul>
+</section>
+
+<section id="install">
+<h2>Installation &amp; usage <a href="#install" class="anchor">#</a></h2>
+<p>There is nothing to install. Invoke it through <code>npx</code>; every argument is forwarded verbatim to <code>bb</code>, run in the current directory.</p>
+<pre><code>npx @bigconfig/bb tasks        # -&gt; bb tasks
+npx @bigconfig/bb &lt;args...&gt;    # -&gt; bb &lt;args...&gt;</code></pre>
+<p>Requires <strong>Node.js &gt;= 18</strong>. The package is <code>@bigconfig/bb</code> (scoped) with a single <code>bb</code> bin.</p>
+</section>
+
+<section id="quickstart">
+<h2>Quick start <a href="#quickstart" class="anchor">#</a></h2>
+<p>List the tasks of a GitHub bb project without cloning anything:</p>
+<pre><code>BB_EDN_REPO=bigconfig-ai/once npx @bigconfig/bb tasks</code></pre>
+<p>Or fully sandboxed in Docker:</p>
+<pre><code>docker run -it --rm -u node -w /home/node node:24 npx @bigconfig/bb tasks</code></pre>
+<p>See the <a href="#ex-local">Examples</a> for the full set.</p>
+</section>
+
+<section id="how">
+<h2>How it works <a href="#how" class="anchor">#</a></h2>
+<p>Each invocation runs the following pipeline; every step is skipped when its result is already present:</p>
+<ol>
+  <li>Resolve the host OS/CPU to babashka + Adoptium asset names.</li>
+  <li><strong>Babashka:</strong> download &amp; cache if the pinned version is missing.</li>
+  <li><strong>JDK:</strong> download &amp; cache Temurin if missing.</li>
+  <li><strong>Git (Linux only):</strong> install via the system package manager if <code>git</code> is not on <code>PATH</code>.</li>
+  <li><strong>bb.edn bootstrap:</strong> if <code>BB_EDN_REPO</code> is set and the cwd has no <code>bb.edn</code>, fetch and adapt one.</li>
+  <li><strong>Run:</strong> spawn <code>bb</code> with your args, cwd = process cwd, <code>JAVA_HOME</code>/<code>PATH</code> pointing at the cached JDK. stdio is inherited; the exit code and <code>SIGINT</code>/<code>SIGTERM</code> are forwarded.</li>
+</ol>
+<p>Downloads are lazy (first run only), not done at <code>npm install</code> time.</p>
+</section>
+
+<section id="babashka">
+<h2>Babashka install <a href="#babashka" class="anchor">#</a></h2>
+<p>
+  The platform-specific archive is downloaded directly from
+  <code>github.com/babashka/babashka/releases</code> (no <code>curl</code>/<code>bash</code>/brew
+  dependency) and extracted into the cache. Extraction uses the system
+  <code>tar</code> (present on macOS, Linux, and Windows 10+); Windows falls
+  back to PowerShell <code>Expand-Archive</code> for <code>.zip</code> if
+  <code>tar</code> is unavailable.
+</p>
+<table>
+  <tr><th>Platform</th><th>Asset</th></tr>
+  <tr><td>macOS arm64</td><td><code>babashka-&lt;ver&gt;-macos-aarch64.tar.gz</code></td></tr>
+  <tr><td>macOS x64</td><td><code>babashka-&lt;ver&gt;-macos-amd64.tar.gz</code></td></tr>
+  <tr><td>Linux x64</td><td><code>babashka-&lt;ver&gt;-linux-amd64.tar.gz</code> (glibc)</td></tr>
+  <tr><td>Linux arm64</td><td><code>babashka-&lt;ver&gt;-linux-aarch64-static.tar.gz</code> (static)</td></tr>
+  <tr><td>Windows x64</td><td><code>babashka-&lt;ver&gt;-windows-amd64.zip</code></td></tr>
+</table>
+<p>Pinned to <code>1.12.196</code>; override with <code>BB_VERSION</code>. Babashka has no prebuilt Windows arm64 binary.</p>
+</section>
+
+<section id="jdk">
+<h2>JDK install <a href="#jdk" class="anchor">#</a></h2>
+<p>
+  An Eclipse Temurin JDK is fetched from the Adoptium v3 API:
+</p>
+<pre><code>https://api.adoptium.net/v3/binary/latest/&lt;feature&gt;/ga/&lt;mac|linux|windows&gt;/&lt;aarch64|x64&gt;/jdk/hotspot/normal/eclipse</code></pre>
+<p>
+  Pinned to feature version <code>21</code> (LTS); override with
+  <code>JDK_VERSION</code>. After extraction the real <code>JAVA_HOME</code> is
+  located (macOS nests it under <code>Contents/Home</code>) and recorded. When
+  <code>bb</code> runs, <code>JAVA_HOME</code> and <code>PATH</code> are set for
+  that subprocess <em>only</em> — nothing system-wide is touched.
+</p>
+<div class="note"><p>babashka itself is a native binary and does not need a JVM; the JDK is bundled for tasks that shell out to <code>java</code> or use JVM-based tooling. It roughly doubles the first-run download (~190&nbsp;MB).</p></div>
+</section>
+
+<section id="git">
+<h2>Git (Linux) <a href="#git" class="anchor">#</a></h2>
+<p>
+  On <strong>Linux only</strong>, if <code>git</code> is not on <code>PATH</code>
+  it is installed via the system package manager — first match of
+  <code>apt-get</code>, <code>dnf</code>, <code>yum</code>, <code>zypper</code>,
+  <code>pacman</code>, <code>apk</code> — using <code>sudo</code> when not
+  running as root. <code>apt-get update</code> failures are tolerated;
+  <code>DEBIAN_FRONTEND=noninteractive</code> is set.
+</p>
+<ul>
+  <li><strong>Skipped</strong> if <code>git</code> is already present.</li>
+  <li><strong>No-op</strong> on macOS/Windows.</li>
+  <li><strong>Fatal</strong>, with an actionable message, if not root and <code>sudo</code> is missing, or no supported package manager is found.</li>
+</ul>
+<p>Unlike the other steps this modifies the system and may prompt for a sudo password; pre-install git to skip it entirely.</p>
+</section>
+
+<section id="bbedn">
+<h2>bb.edn bootstrap <a href="#bbedn" class="anchor">#</a></h2>
+<p>
+  When the current directory has <strong>no <code>bb.edn</code></strong> and
+  <code>BB_EDN_REPO=owner/project</code> is set, that repo's
+  <code>bb.edn</code> is downloaded and the repo itself is added to
+  <code>:deps</code> as a pinned git dependency:
+</p>
+<pre><code>io.github.&lt;owner&gt;/&lt;project&gt; {:git/sha "&lt;sha&gt;"}</code></pre>
+<ol>
+  <li><code>GET /repos/{owner}/{project}/commits?per_page=1</code> → the default-branch HEAD commit (the pinned <code>:git/sha</code>).</li>
+  <li><code>GET /repos/{owner}/{project}/contents/bb.edn?ref=&lt;sha&gt;</code> with <code>Accept: application/vnd.github.raw</code> → the file.</li>
+  <li>The dep is injected with <code>borkdude/rewrite-edn</code> (run through the just-installed <code>bb</code>), so existing comments and formatting are preserved.</li>
+</ol>
+<p>
+  If <code>GITHUB_TOKEN</code> is set it is sent as a bearer token — enabling
+  private repos and lifting GitHub's 60 req/hr unauthenticated limit. A missing
+  or inaccessible repo, or one without a <code>bb.edn</code>, is a fatal error.
+  Skipped entirely if <code>BB_EDN_REPO</code> is unset or a <code>bb.edn</code>
+  already exists.
+</p>
+<div class="note"><p>The first bootstrap also downloads the Clojure tools (<code>~/.deps.clj/…</code>) plus <code>rewrite-edn</code> (pinned <code>0.5.9</code>, override via <code>REWRITE_EDN_VERSION</code>); both are cached afterward.</p></div>
+</section>
+
+<section id="localroot">
+<h2>:local/root stripping <a href="#localroot" class="anchor">#</a></h2>
+<p>
+  A downloaded <code>bb.edn</code> often references sibling projects via
+  <code>:local/root</code> paths that don't exist on your machine. Before the
+  git dep is injected, every dependency whose <em>effective</em> coordinate is
+  a map containing <code>:local/root</code> is removed — from the top-level
+  <code>:deps</code> <strong>and</strong> every task's <code>:extra-deps</code>.
+</p>
+<ul>
+  <li>The <strong>whole entry</strong> (key + coord) is dropped.</li>
+  <li>Detection uses the effective value (rewrite-edn <code>sexpr</code>), so a <code>#_</code>-discarded <code>:local/root</code> alternative is correctly ignored and the active git/maven coord is kept.</li>
+  <li>Valid Maven and git deps are preserved.</li>
+</ul>
+<p>For example <code>bigconfig-ai/once</code> downloads as:</p>
+<pre><code>{:deps {io.github.amiorin/once {:local/root "."}}
+ :tasks {:requires ([io.github.amiorin.once.describe :as describe] ...) ...}}</code></pre>
+<p>and is rewritten (with <code>BB_EDN_REPO=bigconfig-ai/once</code>) to:</p>
+<pre><code>{:deps {io.github.bigconfig-ai/once {:git/sha "&lt;sha&gt;"}}
+ :tasks {:requires ([io.github.amiorin.once.describe :as describe] ...) ...}}</code></pre>
+</section>
+
+<section id="env">
+<h2>Environment variables <a href="#env" class="anchor">#</a></h2>
+<table>
+  <tr><th>Variable</th><th>Default</th><th>Effect</th></tr>
+  <tr><td><code>BB_VERSION</code></td><td><code>1.12.196</code></td><td>babashka release to install</td></tr>
+  <tr><td><code>JDK_VERSION</code></td><td><code>21</code></td><td>Temurin feature version (e.g. 17, 21, 25)</td></tr>
+  <tr><td><code>REWRITE_EDN_VERSION</code></td><td><code>0.5.9</code></td><td><code>borkdude/rewrite-edn</code> version used to edit <code>bb.edn</code></td></tr>
+  <tr><td><code>BB_EDN_REPO</code></td><td><em>unset</em></td><td><code>owner/project</code> to bootstrap a <code>bb.edn</code> from</td></tr>
+  <tr><td><code>GITHUB_TOKEN</code></td><td><em>unset</em></td><td>Bearer token for <code>BB_EDN_REPO</code> (private repos / rate limit)</td></tr>
+</table>
+</section>
+
+<section id="platforms">
+<h2>Supported platforms <a href="#platforms" class="anchor">#</a></h2>
+<p>macOS arm64, macOS x64, Linux x64, Linux arm64, Windows x64.</p>
+<ul>
+  <li>Linux x64 uses babashka's glibc build (may not run on musl distros such as Alpine).</li>
+  <li>Linux arm64 uses babashka's static build, which runs on both glibc and musl.</li>
+  <li>Windows arm64 is unsupported (no prebuilt babashka binary).</li>
+  <li>Extraction needs the system <code>tar</code> (or PowerShell on Windows for <code>.zip</code>).</li>
+</ul>
+</section>
+
+<section id="cache">
+<h2>Cache layout <a href="#cache" class="anchor">#</a></h2>
+<p>A single shared directory, reused across all projects:</p>
+<table>
+  <tr><th>Platform</th><th>Base</th></tr>
+  <tr><td>macOS / Linux</td><td><code>$XDG_CACHE_HOME</code> or <code>~/.cache</code> → <code>bigconfig-bb/</code></td></tr>
+  <tr><td>Windows</td><td><code>%LOCALAPPDATA%</code> → <code>bigconfig-bb/</code></td></tr>
+</table>
+<pre><code>bigconfig-bb/
+├── bb/&lt;version&gt;/bb            # babashka binary
+└── jdk/&lt;feature&gt;/             # extracted Temurin JDK
+    └── .javahome              # recorded JAVA_HOME (relative)</code></pre>
+<p>Installs are atomic: each artifact is unpacked into a private <code>.tmp-*</code> dir and renamed into place, so concurrent first-runs never leave a half-written cache. Delete the directory to force a clean reinstall.</p>
+</section>
+
+<section id="passthrough">
+<h2>Passthrough &amp; exit codes <a href="#passthrough" class="anchor">#</a></h2>
+<ul>
+  <li>All arguments (including flags) are passed to <code>bb</code> verbatim.</li>
+  <li><code>bb</code> runs in the current working directory, so it picks up the local <code>bb.edn</code>.</li>
+  <li>stdio is inherited; <code>bb</code>'s exit code is forwarded; <code>SIGINT</code>/<code>SIGTERM</code> are forwarded to the child.</li>
+  <li>No arguments → <code>bb</code>'s normal behavior (reads stdin / REPL).</li>
+</ul>
+</section>
+
+<section id="ex-local">
+<h2>Example — local bootstrap <a href="#ex-local" class="anchor">#</a></h2>
+<p>Run the tasks of <code>bigconfig-ai/once</code> with nothing installed and no clone:</p>
+<pre><code>BB_EDN_REPO=bigconfig-ai/once npx @bigconfig/bb tasks</code></pre>
+<p>
+  First run: downloads babashka + Temurin JDK, fetches the repo's
+  <code>bb.edn</code> pinned to its latest commit, strips the
+  <code>:local/root</code> self-dep, injects
+  <code>io.github.bigconfig-ai/once {:git/sha "…"}</code>, writes
+  <code>./bb.edn</code>, then runs <code>bb tasks</code>.
+</p>
+</section>
+
+<section id="ex-docker">
+<h2>Example — Docker <a href="#ex-docker" class="anchor">#</a></h2>
+<p>Fully sandboxed in a stock Node 24 image, as the unprivileged <code>node</code> user:</p>
+<pre><code>docker run -it --rm -u node -w /home/node node:24 npx @bigconfig/bb tasks</code></pre>
+<p>
+  <code>-u node</code> runs as the non-root <code>node</code> user and
+  <code>-w /home/node</code> is its writable home — so the cache lands in
+  <code>/home/node/.cache/bigconfig-bb</code>. With no <code>BB_EDN_REPO</code>
+  and no <code>bb.edn</code> present, <code>bb tasks</code> simply reports no
+  tasks.
+</p>
+</section>
+
+<section id="ex-docker-validate">
+<h2>Example — Docker + repo + task <a href="#ex-docker-validate" class="anchor">#</a></h2>
+<p>
+  Same container, but bootstrap <code>bigconfig-ai/once</code> and run its
+  <code>validate</code> task — pass the env var with <code>-e</code>:
+</p>
+<pre><code>docker run -it --rm -u node -w /home/node \
+  -e BB_EDN_REPO=bigconfig-ai/once \
+  node:24 npx @bigconfig/bb validate</code></pre>
+<p>
+  The launcher writes <code>/home/node/bb.edn</code> (bootstrapped + cleaned),
+  then runs <code>bb validate</code> against it. Add
+  <code>-e GITHUB_TOKEN=…</code> for a private repo or to avoid GitHub API
+  rate limits.
+</p>
+</section>
+
+<section id="ex-bbedn">
+<h2>Example — BB_EDN_REPO explained <a href="#ex-bbedn" class="anchor">#</a></h2>
+<p>
+  <code>BB_EDN_REPO</code> is the bootstrap switch. When set (and the cwd has
+  no <code>bb.edn</code>) it makes any GitHub repo that ships a
+  <code>bb.edn</code> directly runnable: the file is downloaded pinned to the
+  repo's default-branch HEAD, <code>:local/root</code> deps are stripped, and
+  the repo is added back as a reproducible git dependency.
+</p>
+<h3>Local</h3>
+<pre><code>BB_EDN_REPO=bigconfig-ai/once npx @bigconfig/bb validate</code></pre>
+<h3>Docker</h3>
+<pre><code>docker run -it --rm -u node -w /home/node \
+  -e BB_EDN_REPO=bigconfig-ai/once \
+  node:24 npx @bigconfig/bb tasks</code></pre>
+<p>Unset it (or run where a <code>bb.edn</code> already exists) and this step is skipped — <code>bb</code> runs against the local project as usual.</p>
+</section>
+
+<section id="requirements">
+<h2>Requirements <a href="#requirements" class="anchor">#</a></h2>
+<ul>
+  <li>Node.js &gt;= 18.</li>
+  <li>Network access on first run (cached afterward).</li>
+  <li>System <code>tar</code> for extraction (PowerShell fallback on Windows).</li>
+  <li>Linux without <code>git</code>: a supported package manager and <code>sudo</code> (or root).</li>
+</ul>
+</section>
+
+<section id="caveats">
+<h2>Caveats / what to avoid <a href="#caveats" class="anchor">#</a></h2>
+<ul>
+  <li><strong>Alpine / musl + x64:</strong> the Linux x64 babashka build is glibc-based and may not run; Linux arm64 (static) is fine.</li>
+  <li><strong>Exotic EDN:</strong> a <code>bb.edn</code> using tagged literals can fail <code>rewrite-edn</code>'s <code>sexpr</code> — it fails loudly with a clear error, no silent corruption.</li>
+  <li><strong>Symbol-invalid names:</strong> an <code>owner</code>/<code>project</code> with characters invalid in a Clojure symbol (used in <code>io.github.&lt;owner&gt;/&lt;project&gt;</code>) is a documented limitation.</li>
+  <li><strong>First-run weight:</strong> babashka + JDK ≈ 190&nbsp;MB; the first <code>bb.edn</code> bootstrap also pulls the Clojure tools.</li>
+  <li><strong>Tested surface:</strong> exercised live on macOS arm64; the Linux arm64 asset URL is verified, other platforms are mapped but not yet run end-to-end.</li>
+</ul>
+</section>
+
+<section id="changelog">
+<h2>Changelog <a href="#changelog" class="anchor">#</a></h2>
+<details open>
+<summary><strong>0.2.0 — 2026-05-17</strong></summary>
+<ul>
+  <li>bb.edn bootstrap from a GitHub repo via <code>BB_EDN_REPO</code> (pinned to default-branch HEAD; <code>GITHUB_TOKEN</code> support).</li>
+  <li>Repo injected as <code>io.github.&lt;owner&gt;/&lt;project&gt; {:git/sha …}</code> using comment-preserving <code>borkdude/rewrite-edn</code>.</li>
+  <li><code>:local/root</code> deps stripped from <code>:deps</code> and task <code>:extra-deps</code>.</li>
+</ul>
+</details>
+<details>
+<summary><strong>0.1.0 — 2026-05-17</strong></summary>
+<ul>
+  <li>npx launcher: bootstraps babashka and a Temurin JDK on first use, forwards args to <code>bb</code>.</li>
+  <li>Linux: installs <code>git</code> via the system package manager when missing.</li>
+  <li>Shared, race-safe cache; pinned versions overridable via env.</li>
+</ul>
+</details>
+</section>
+
+<section id="glossary">
+<h2>Glossary <a href="#glossary" class="anchor">#</a></h2>
+<dl>
+  <dt><strong>babashka (bb)</strong></dt>
+  <dd>A fast-starting Clojure scripting runtime, compiled with GraalVM <code>native-image</code> (no JVM required).</dd>
+  <dt><strong>bb.edn</strong></dt>
+  <dd>Babashka's project file: <code>:paths</code>, <code>:deps</code>, and <code>:tasks</code>.</dd>
+  <dt><strong>deps coordinate</strong></dt>
+  <dd>The value mapping a dependency symbol to its source — e.g. <code>{:mvn/version …}</code>, <code>{:git/sha …}</code>, or <code>{:local/root …}</code>.</dd>
+  <dt><strong>:git/sha</strong></dt>
+  <dd>A git dependency pinned to an exact commit; with the <code>io.github.owner/project</code> symbol the URL is inferred.</dd>
+  <dt><strong>:local/root</strong></dt>
+  <dd>A dependency resolved from a local filesystem path — invalid once a <code>bb.edn</code> is downloaded, hence stripped.</dd>
+  <dt><strong>rewrite-edn</strong></dt>
+  <dd><code>borkdude/rewrite-edn</code>: edits EDN while preserving whitespace and comments.</dd>
+  <dt><strong>Temurin</strong></dt>
+  <dd>Eclipse Adoptium's OpenJDK distribution, fetched here via the Adoptium v3 API.</dd>
+  <dt><strong>GraalVM native-image</strong></dt>
+  <dd>Ahead-of-time compiler producing the standalone babashka binary.</dd>
+</dl>
+</section>
+
+<hr />
+<footer class="page">
+  <p>
+    Generated from the project source on 2026-05-17. License: MIT.
+    Maintainer: <a href="https://albertomiorin.com">Alberto Miorin</a>.
+  </p>
+</footer>
+
+</main>
+</div>
+
+<script>
+  // Active section in sidebar (offline; no external libraries).
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      const id = entry.target.id;
+      const link = document.querySelector(`#toc a[href="#${id}"]`);
+      if (!link) return;
+      if (entry.isIntersecting) {
+        document.querySelectorAll('#toc a.active').forEach(a => a.classList.remove('active'));
+        link.classList.add('active');
+      }
+    });
+  }, { rootMargin: '-20% 0px -70% 0px' });
+  document.querySelectorAll('main section[id]').forEach(s => observer.observe(s));
+</script>
+</body>
+</html>
