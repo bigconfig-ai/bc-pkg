@@ -351,7 +351,7 @@ npx @bigconfig/bb &lt;args...&gt;    # -&gt; bb &lt;args...&gt;</code></pre>
   <li><strong>JDK:</strong> download &amp; cache Temurin if missing.</li>
   <li><strong>Git (Linux only):</strong> install via the system package manager if <code>git</code> is not on <code>PATH</code>.</li>
   <li><strong>bb.edn bootstrap:</strong> if <code>BB_EDN_REPO</code> is set and the cwd has no <code>bb.edn</code>, fetch and adapt one.</li>
-  <li><strong>Run:</strong> spawn <code>bb</code> with your args, cwd = process cwd, <code>JAVA_HOME</code>/<code>PATH</code> pointing at the cached JDK. stdio is inherited; the exit code and <code>SIGINT</code>/<code>SIGTERM</code> are forwarded.</li>
+  <li><strong>Run:</strong> spawn <code>bb</code> with your args, cwd = process cwd, <code>JAVA_HOME</code>/<code>PATH</code> pointing at the cached JDK and cached <code>bb</code>. stdio is inherited; the exit code and <code>SIGINT</code>/<code>SIGTERM</code> are forwarded.</li>
 </ol>
 <p>Downloads are lazy (first run only), not done at <code>npm install</code> time.</p>
 </section>
@@ -388,7 +388,8 @@ npx @bigconfig/bb &lt;args...&gt;    # -&gt; bb &lt;args...&gt;</code></pre>
   <code>JDK_VERSION</code>. After extraction the real <code>JAVA_HOME</code> is
   located (macOS nests it under <code>Contents/Home</code>) and recorded. When
   <code>bb</code> runs, <code>JAVA_HOME</code> and <code>PATH</code> are set for
-  that subprocess <em>only</em> — nothing system-wide is touched.
+  that subprocess <em>only</em>; <code>PATH</code> also includes the cached
+  <code>bb</code> so nested <code>bb</code> calls work. Nothing system-wide is touched.
 </p>
 <div class="note"><p>babashka itself is a native binary and does not need a JVM; the JDK is bundled for tasks that shell out to <code>java</code> or use JVM-based tooling. It roughly doubles the first-run download (~190&nbsp;MB).</p></div>
 </section>
@@ -576,7 +577,9 @@ npx @bigconfig/bb &lt;args...&gt;    # -&gt; bb &lt;args...&gt;</code></pre>
   workflow now lives in <code>bb.edn</code>; run <code>bb tasks</code> or
   <code>bb options</code> to inspect it. If <code>bb</code> is not on
   <code>PATH</code>, use <code>node bin/bb.js &lt;task&gt;</code> to exercise the
-  local launcher instead.
+  local launcher instead. When bootstrapped into an empty directory with
+  <code>BB_EDN_REPO=bigconfig-ai/npm-bb</code>, task config downloads a missing
+  <code>Dockerfile</code> from the same pinned GitHub SHA.
 </p>
 <pre><code>bb tasks                 # list repository tasks
 bb build                 # build npm-bb:dev
@@ -588,9 +591,9 @@ bb shell --skip-build    # reuse the existing image</code></pre>
   <code>homes/&lt;random-name&gt;</code> and mounts it at
   <code>/home/developer</code> in the container. Before starting Docker it
   copies <code>~/.pi/agent/auth.json</code> and
-  <code>~/.pi/agent/settings.json</code> into that generated home so the agent
-  can run inside the container. Use <code>--project-subdir PATH</code> to mount
-  a specific host directory instead.
+  <code>~/.pi/agent/settings.json</code> into that generated home when those
+  files exist; missing files are skipped. Use <code>--project-subdir PATH</code>
+  to mount a specific host directory instead.
 </p>
 <table>
   <tr><th>Task</th><th>Purpose</th></tr>

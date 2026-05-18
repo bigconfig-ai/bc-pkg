@@ -352,15 +352,19 @@ function ensureGit() {
 
 // --- bb.edn bootstrap ----------------------------------------------------
 
-// Env augmented so the spawned bb finds the cached JDK; nothing system-wide.
-function bbEnv(javaHome) {
-  const env = { ...process.env };
+// Env augmented so spawned processes find the cached JDK and bb; nothing system-wide.
+function bbEnv(javaHome, bbPath, extraEnv = {}) {
+  const env = { ...process.env, ...extraEnv };
+  const pathEntries = [];
   if (javaHome) {
     env.JAVA_HOME = javaHome;
-    env.PATH =
-      path.join(javaHome, 'bin') +
-      path.delimiter +
-      (process.env.PATH || '');
+    pathEntries.push(path.join(javaHome, 'bin'));
+  }
+  if (bbPath) {
+    pathEntries.push(path.dirname(bbPath));
+  }
+  if (pathEntries.length) {
+    env.PATH = pathEntries.join(path.delimiter) + path.delimiter + (env.PATH || '');
   }
   return env;
 }
@@ -428,9 +432,9 @@ const REWRITE_SCRIPT = `(require '[babashka.deps :as deps])
 // as an io.github git dep. Disabled (skipped) if the env var is unset.
 async function ensureBbEdn(bbPath, javaHome) {
   const repo = process.env.BB_EDN_REPO;
-  if (!repo) return; // step disabled — proceed straight to bb
+  if (!repo) return null; // step disabled — proceed straight to bb
   const target = path.join(process.cwd(), 'bb.edn');
-  if (fs.existsSync(target)) return; // already present — leave it alone
+  if (fs.existsSync(target)) return null; // already present — leave it alone
 
   const m = repo.trim().match(/^([^/\s@]+)\/([^/\s@]+)$/);
   if (!m) {
@@ -473,7 +477,7 @@ async function ensureBbEdn(bbPath, javaHome) {
     const script = path.join(tmp, 'rewrite.clj');
     fs.writeFileSync(inFile, ednText);
     fs.writeFileSync(script, REWRITE_SCRIPT);
-    const env = bbEnv(javaHome);
+    const env = bbEnv(javaHome, bbPath);
     Object.assign(env, {
       BBEDN_IN: inFile,
       BBEDN_OUT: target,
@@ -494,6 +498,7 @@ async function ensureBbEdn(bbPath, javaHome) {
     if (!fs.existsSync(target)) {
       throw new Error('rewrite-edn step did not produce a bb.edn');
     }
+    return { owner, project, sha };
   } finally {
     rmrf(tmp);
   }
@@ -501,8 +506,8 @@ async function ensureBbEdn(bbPath, javaHome) {
 
 // --- Run bb --------------------------------------------------------------
 
-function runBb(bbPath, args, javaHome) {
-  const env = bbEnv(javaHome);
+function runBb(bbPath, args, javaHome, extraEnv = {}) {
+  const env = bbEnv(javaHome, bbPath, extraEnv);
 
   const child = spawn(bbPath, args, {
     stdio: 'inherit',
@@ -536,8 +541,9 @@ async function main(args) {
   const bbPath = await ensureBabashka(p);
   const javaHome = await ensureJdk(p);
   ensureGit();
-  await ensureBbEdn(bbPath, javaHome);
-  const code = await runBb(bbPath, args, javaHome);
+  const bootstrapped = await ensureBbEdn(bbPath, javaHome);
+  const extraEnv = bootstrapped ? { BB_EDN_REPO_SHA: bootstrapped.sha } : {};
+  const code = await runBb(bbPath, args, javaHome, extraEnv);
   process.exit(code);
 }
 

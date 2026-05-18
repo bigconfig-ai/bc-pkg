@@ -1,6 +1,8 @@
 {:tasks
- {:requires ([babashka.fs :as fs]
+ {:requires ([babashka.curl :as curl]
+             [babashka.fs :as fs]
              [babashka.process :as p]
+             [clojure.edn :as edn]
              [clojure.string :as str])
 
   :init
@@ -66,6 +68,11 @@
        "--docker-run-args" "--docker-run-arg" "--skip-build" "--dry-run"
        "--all" "--help"])
 
+    (def dockerfile-owner "bigconfig-ai")
+    (def dockerfile-project "npm-bb")
+    (def dockerfile-repo (str dockerfile-owner "/" dockerfile-project))
+    (def dockerfile-dep 'io.github.bigconfig-ai/npm-bb)
+
     (defn blankish? [x]
       (or (nil? x) (and (string? x) (str/blank? x))))
 
@@ -90,6 +97,94 @@
 
     (defn printable-command [args]
       (str/join " " (map sh-quote args)))
+
+    (defn github-headers [accept]
+      (cond-> {"user-agent" "@bigconfig/bb"
+               "accept" accept
+               "x-github-api-version" "2022-11-28"}
+        (env "GITHUB_TOKEN") (assoc "authorization" (str "Bearer " (env "GITHUB_TOKEN")))))
+
+    (defn slurp-github-file [owner project sha file]
+      (let [url (str "https://api.github.com/repos/" owner "/" project
+                     "/contents/" file "?ref=" sha)
+            resp (curl/get url {:headers (github-headers "application/vnd.github.raw")
+                                :throw false})
+            status (:status resp)]
+        (cond
+          (= 200 status) (:body resp)
+          (= 404 status) (throw (ex-info (str owner "/" project " has no " file
+                                               " at " sha)
+                                          {:repo (str owner "/" project)
+                                           :sha sha
+                                           :file file}))
+          :else (throw (ex-info (str "GitHub API error " status " fetching " file
+                                     " from " owner "/" project)
+                                {:repo (str owner "/" project)
+                                 :sha sha
+                                 :file file
+                                 :status status})))))
+
+    (defn read-project-bb-edn [project-dir]
+      (let [bb-edn (fs/path project-dir "bb.edn")]
+        (when (fs/exists? bb-edn)
+          (try
+            (edn/read-string (slurp (str bb-edn)))
+            (catch Exception _ nil)))))
+
+    (defn dockerfile-sha-from-bb-edn [project-dir]
+      (some-> (read-project-bb-edn project-dir)
+              :deps
+              (get dockerfile-dep)
+              :git/sha))
+
+    (defn dockerfile-sha-from-ls-remote []
+      (try
+        (let [out (command-out "git" "ls-remote"
+                               (str "https://github.com/" dockerfile-repo ".git")
+                               "HEAD")
+              sha (first (str/split out (re-pattern "\\s+")))]
+          (when-not (blankish? sha) sha))
+        (catch Exception _ nil)))
+
+    (defn dockerfile-pinned-sha [project-dir]
+      (first-value (dockerfile-sha-from-bb-edn project-dir)
+                   (env "BB_EDN_REPO_SHA")))
+
+    (defn dockerfile-sha [project-dir]
+      (first-value (dockerfile-pinned-sha project-dir)
+                   (dockerfile-sha-from-ls-remote)))
+
+    (defn short-sha [sha]
+      (subs sha 0 (min 7 (count sha))))
+
+    (defn ensure-trailing-newline [s]
+      (if (str/ends-with? s "\n") s (str s "\n")))
+
+    (defn ensure-dockerfile! [cfg]
+      (let [target (fs/path (:project-dir cfg) "Dockerfile")]
+        (when-not (fs/exists? target)
+          (if (:dry-run? cfg)
+            (println "+ download"
+                     (str dockerfile-repo "/Dockerfile@"
+                          (or (some-> (dockerfile-pinned-sha (:project-dir cfg)) short-sha)
+                              "<resolved-sha>"))
+                     "->"
+                     (str target))
+            (let [sha (dockerfile-sha (:project-dir cfg))]
+              (when (blankish? sha)
+                (throw (ex-info (str "Could not determine Dockerfile SHA for " dockerfile-repo)
+                                {:repo dockerfile-repo
+                                 :hint (str "Run with BB_EDN_REPO=" dockerfile-repo
+                                            " so @bigconfig/bb injects a pinned dep, "
+                                            "or install git so the repo HEAD can be resolved.")})))
+              (println "+ download"
+                       (str dockerfile-repo "/Dockerfile@" (short-sha sha))
+                       "->"
+                       (str target))
+              (fs/create-dirs (fs/parent target))
+              (spit (str target)
+                    (ensure-trailing-newline
+                     (slurp-github-file dockerfile-owner dockerfile-project sha "Dockerfile"))))))))
 
     (defn split-option [arg]
       (if-let [idx (str/index-of arg "=")]
@@ -172,26 +267,28 @@
                                         (str (fs/path project-dir prefix name)))))
               image (resolved-option cli :image "IMAGE" "npm-bb")
               tag (resolved-option cli :tag "TAG" "dev")
-              docker-run-args (resolved-option cli :docker-run-args "DOCKER_RUN_ARGS" nil)]
-          {:image image
-           :tag tag
-           :image-ref (str image ":" tag)
-           :node-major (resolved-option cli :node-major "NODE_MAJOR" "24")
-           :no-cache? (boolean (:no-cache? cli))
-           :user-id (resolved-option cli :user-id "USER_ID" (command-out "id" "-u"))
-           :group-id (resolved-option cli :group-id "GROUP_ID" (command-out "id" "-g"))
-           :project-dir project-dir
-           :workdir (resolved-option cli :workdir "WORKDIR" "/home/developer")
-           :prefix prefix
-           :name name
-           :project-subdir project-subdir
-           :project-subdir-explicit? (boolean project-subdir-override)
-           :docker-run-args docker-run-args
-           :docker-run-arg (vec (:docker-run-arg cli))
-           :command (or (seq (:command cli)) ["bash"])
-           :skip-build? (boolean (:skip-build? cli))
-           :dry-run? (boolean (:dry-run? cli))
-           :all? (boolean (:all? cli))})))
+              docker-run-args (resolved-option cli :docker-run-args "DOCKER_RUN_ARGS" nil)
+              cfg {:image image
+                   :tag tag
+                   :image-ref (str image ":" tag)
+                   :node-major (resolved-option cli :node-major "NODE_MAJOR" "24")
+                   :no-cache? (boolean (:no-cache? cli))
+                   :user-id (resolved-option cli :user-id "USER_ID" (command-out "id" "-u"))
+                   :group-id (resolved-option cli :group-id "GROUP_ID" (command-out "id" "-g"))
+                   :project-dir project-dir
+                   :workdir (resolved-option cli :workdir "WORKDIR" "/home/developer")
+                   :prefix prefix
+                   :name name
+                   :project-subdir project-subdir
+                   :project-subdir-explicit? (boolean project-subdir-override)
+                   :docker-run-args docker-run-args
+                   :docker-run-arg (vec (:docker-run-arg cli))
+                   :command (or (seq (:command cli)) ["bash"])
+                   :skip-build? (boolean (:skip-build? cli))
+                   :dry-run? (boolean (:dry-run? cli))
+                   :all? (boolean (:all? cli))}]
+          (ensure-dockerfile! cfg)
+          cfg)))
 
     (defn run-args! [cfg args]
       (println "+" (printable-command args))
@@ -212,19 +309,18 @@
                      "--build-arg" (str "GROUP_ID=" (:group-id cfg))
                      "--build-arg" (str "NODE_MAJOR=" (:node-major cfg))
                      "-t" (:image-ref cfg)
-                     "."]))))
+                     (:project-dir cfg)]))))
 
     (defn copy-agent-file! [cfg file-name]
       (let [source (fs/path (System/getProperty "user.home") ".pi" "agent" file-name)
             target-dir (fs/path (:project-subdir cfg) ".pi" "agent")
             target (fs/path target-dir file-name)]
-        (println "+ cp" (sh-quote source) (str (sh-quote target-dir) "/"))
-        (when-not (:dry-run? cfg)
-          (when-not (fs/exists? source)
-            (throw (ex-info (str "Missing " source)
-                            {:path (str source)
-                             :hint "Create it first or run with --dry-run."})))
-          (fs/copy source target {:replace-existing true}))))
+        (if (fs/exists? source)
+          (do
+            (println "+ cp" (sh-quote source) (str (sh-quote target-dir) "/"))
+            (when-not (:dry-run? cfg)
+              (fs/copy source target {:replace-existing true})))
+          (println "# skipping missing" (str source)))))
 
     (defn prepare-home! [cfg]
       (let [agent-dir (fs/path (:project-subdir cfg) ".pi" "agent")]

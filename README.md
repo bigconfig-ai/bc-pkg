@@ -24,8 +24,9 @@ your current working directory, so it picks up the local `bb.edn`.
 4. On Linux, `git` is installed via the system package manager if it is not on
    `PATH`.
 5. If requested, a `bb.edn` is bootstrapped from `BB_EDN_REPO`.
-6. `bb` is launched with `JAVA_HOME` / `PATH` pointing at the cached JDK — the
-   environment change applies **only** to the `bb` subprocess.
+6. `bb` is launched with `JAVA_HOME` / `PATH` pointing at the cached JDK (and
+   the cached `bb`, so nested `bb` calls work) — the environment change applies
+   **only** to the `bb` subprocess.
 
 Subsequent runs reuse the cache and start immediately.
 
@@ -103,6 +104,15 @@ coding agent, Claude, `ripgrep`, `fd`, and `sudo`. Requires Docker. Commands
 below assume `bb` is on `PATH`; use `node bin/bb.js <task>` to exercise the
 local launcher instead.
 
+If these tasks are bootstrapped into an empty directory with
+`BB_EDN_REPO=bigconfig-ai/npm-bb`, the missing `Dockerfile` is downloaded into
+that directory from the same pinned GitHub SHA as the bootstrapped `bb.edn`:
+
+```sh
+mkdir empty && cd empty
+BB_EDN_REPO=bigconfig-ai/npm-bb npx @bigconfig/bb shell
+```
+
 ```sh
 bb tasks                 # list repository tasks
 bb build                 # build npm-bb:dev
@@ -114,7 +124,7 @@ bb shell --skip-build    # reuse the existing image
 `bb shell` creates a writable host directory under `homes/<random-name>` and
 mounts it at `/home/developer` in the container. Before starting Docker it
 copies `~/.pi/agent/auth.json` and `~/.pi/agent/settings.json` into that
-generated home so the agent can run inside the container. Use
+generated home when those files exist; missing files are skipped. Use
 `--project-subdir PATH` to mount a specific host directory instead, and
 `bb homes` / `bb clean --all` to list or remove generated homes.
 
