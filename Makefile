@@ -32,7 +32,9 @@ build:
 	docker build $(BUILD_ARGS) -t $(IMAGE):$(TAG) .
 
 run: build
-	mkdir -p $(PROJECT_SUBDIR)
+	mkdir -p $(PROJECT_SUBDIR)/.pi/agent
+	cp ~/.pi/agent/auth.json     $(PROJECT_SUBDIR)/.pi/agent/
+	cp ~/.pi/agent/settings.json $(PROJECT_SUBDIR)/.pi/agent/
 	docker run $(RUN_ARGS) $(IMAGE):$(TAG)
 
 shell: run
