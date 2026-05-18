@@ -8,8 +8,8 @@ to `bb`.
 ## Usage
 
 ```sh
-npx @bigconfig/bb tasks        # -> bb tasks
-npx @bigconfig/bb <args...>    # -> bb <args...>
+npx @bigconfig/bb@latest tasks        # -> bb tasks
+npx @bigconfig/bb@latest <args...>    # -> bb <args...>
 ```
 
 All arguments (including flags) are passed through verbatim, and `bb` runs in
@@ -58,7 +58,7 @@ Valid Maven/git deps are kept.
   API rate limit.
 
 ```sh
-BB_EDN_REPO=my-org/shared-tasks npx @bigconfig/bb tasks
+BB_EDN_REPO=my-org/shared-tasks npx @bigconfig/bb@latest tasks
 ```
 
 ## Cache location
@@ -110,7 +110,7 @@ that directory from the same pinned GitHub SHA as the bootstrapped `bb.edn`:
 
 ```sh
 mkdir empty && cd empty
-BB_EDN_REPO=bigconfig-ai/npm-bb npx @bigconfig/bb shell
+BB_EDN_REPO=bigconfig-ai/npm-bb npx @bigconfig/bb@latest shell
 ```
 
 ```sh

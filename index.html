@@ -292,7 +292,7 @@
   An <code>npx</code> launcher that bootstraps babashka, a Temurin JDK, git (on
   Linux), and an optional <code>bb.edn</code> on first use — then forwards every
   argument to <code>bb</code>. Zero install:
-  <code>npx @bigconfig/bb tasks</code> becomes <code>bb tasks</code>.
+  <code>npx @bigconfig/bb@latest tasks</code> becomes <code>bb tasks</code>.
 </p>
 
 <section id="overview">
@@ -328,17 +328,17 @@
 <section id="install">
 <h2>Installation &amp; usage <a href="#install" class="anchor">#</a></h2>
 <p>There is nothing to install. Invoke it through <code>npx</code>; every argument is forwarded verbatim to <code>bb</code>, run in the current directory.</p>
-<pre><code>npx @bigconfig/bb tasks        # -&gt; bb tasks
-npx @bigconfig/bb &lt;args...&gt;    # -&gt; bb &lt;args...&gt;</code></pre>
+<pre><code>npx @bigconfig/bb@latest tasks        # -&gt; bb tasks
+npx @bigconfig/bb@latest &lt;args...&gt;    # -&gt; bb &lt;args...&gt;</code></pre>
 <p>Requires <strong>Node.js &gt;= 18</strong>. The package is <code>@bigconfig/bb</code> (scoped) with a single <code>bb</code> bin.</p>
 </section>
 
 <section id="quickstart">
 <h2>Quick start <a href="#quickstart" class="anchor">#</a></h2>
 <p>List the tasks of a GitHub bb project without cloning anything:</p>
-<pre><code>BB_EDN_REPO=bigconfig-ai/once npx @bigconfig/bb tasks</code></pre>
+<pre><code>BB_EDN_REPO=bigconfig-ai/once npx @bigconfig/bb@latest tasks</code></pre>
 <p>Or fully sandboxed in Docker:</p>
-<pre><code>docker run -it --rm -u node -w /home/node node:24 npx @bigconfig/bb tasks</code></pre>
+<pre><code>docker run -it --rm -u node -w /home/node node:24 npx @bigconfig/bb@latest tasks</code></pre>
 <p>See the <a href="#ex-local">Examples</a> for the full set.</p>
 </section>
 
@@ -509,7 +509,7 @@ npx @bigconfig/bb &lt;args...&gt;    # -&gt; bb &lt;args...&gt;</code></pre>
 <section id="ex-local">
 <h2>Example — local bootstrap <a href="#ex-local" class="anchor">#</a></h2>
 <p>Run the tasks of <code>bigconfig-ai/once</code> with nothing installed and no clone:</p>
-<pre><code>BB_EDN_REPO=bigconfig-ai/once npx @bigconfig/bb tasks</code></pre>
+<pre><code>BB_EDN_REPO=bigconfig-ai/once npx @bigconfig/bb@latest tasks</code></pre>
 <p>
   First run: downloads babashka + Temurin JDK, fetches the repo's
   <code>bb.edn</code> pinned to its latest commit, strips the
@@ -522,7 +522,7 @@ npx @bigconfig/bb &lt;args...&gt;    # -&gt; bb &lt;args...&gt;</code></pre>
 <section id="ex-docker">
 <h2>Example — Docker <a href="#ex-docker" class="anchor">#</a></h2>
 <p>Fully sandboxed in a stock Node 24 image, as the unprivileged <code>node</code> user:</p>
-<pre><code>docker run -it --rm -u node -w /home/node node:24 npx @bigconfig/bb tasks</code></pre>
+<pre><code>docker run -it --rm -u node -w /home/node node:24 npx @bigconfig/bb@latest tasks</code></pre>
 <p>
   <code>-u node</code> runs as the non-root <code>node</code> user and
   <code>-w /home/node</code> is its writable home — so the cache lands in
@@ -540,7 +540,7 @@ npx @bigconfig/bb &lt;args...&gt;    # -&gt; bb &lt;args...&gt;</code></pre>
 </p>
 <pre><code>docker run -it --rm -u node -w /home/node \
   -e BB_EDN_REPO=bigconfig-ai/once \
-  node:24 npx @bigconfig/bb validate</code></pre>
+  node:24 npx @bigconfig/bb@latest validate</code></pre>
 <p>
   The launcher writes <code>/home/node/bb.edn</code> (bootstrapped + cleaned),
   then runs <code>bb validate</code> against it. Add
@@ -559,11 +559,11 @@ npx @bigconfig/bb &lt;args...&gt;    # -&gt; bb &lt;args...&gt;</code></pre>
   the repo is added back as a reproducible git dependency.
 </p>
 <h3>Local</h3>
-<pre><code>BB_EDN_REPO=bigconfig-ai/once npx @bigconfig/bb validate</code></pre>
+<pre><code>BB_EDN_REPO=bigconfig-ai/once npx @bigconfig/bb@latest validate</code></pre>
 <h3>Docker</h3>
 <pre><code>docker run -it --rm -u node -w /home/node \
   -e BB_EDN_REPO=bigconfig-ai/once \
-  node:24 npx @bigconfig/bb tasks</code></pre>
+  node:24 npx @bigconfig/bb@latest tasks</code></pre>
 <p>Unset it (or run where a <code>bb.edn</code> already exists) and this step is skipped — <code>bb</code> runs against the local project as usual.</p>
 </section>
 
