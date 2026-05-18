@@ -21,9 +21,11 @@ your current working directory, so it picks up the local `bb.edn`.
    Adoptium API parameters.
 2. babashka is downloaded from its GitHub releases and cached.
 3. A Temurin JDK is downloaded from the Adoptium API and cached.
-4. `bb` is launched with `JAVA_HOME` / `PATH` pointing at the cached JDK — the
-   environment change applies **only** to the `bb` subprocess, nothing
-   system-wide.
+4. On Linux, `git` is installed via the system package manager if it is not on
+   `PATH`.
+5. If requested, a `bb.edn` is bootstrapped from `BB_EDN_REPO`.
+6. `bb` is launched with `JAVA_HOME` / `PATH` pointing at the cached JDK — the
+   environment change applies **only** to the `bb` subprocess.
 
 Subsequent runs reuse the cache and start immediately.
 
@@ -91,6 +93,46 @@ Notes:
 - Extraction uses the system `tar` (present on macOS, Linux, and Windows
   10+); Windows falls back to PowerShell `Expand-Archive` for `.zip` if `tar`
   is unavailable.
+
+## Development Docker image
+
+This repository also includes a `Dockerfile` and `bb.edn` tasks for a
+throwaway development shell. The former Makefile workflow now lives in
+`bb.edn`. The image is based on Ubuntu 24.04 and installs Node.js, the pi
+coding agent, Claude, `ripgrep`, `fd`, and `sudo`. Requires Docker. Commands
+below assume `bb` is on `PATH`; use `node bin/bb.js <task>` to exercise the
+local launcher instead.
+
+```sh
+bb tasks                 # list repository tasks
+bb build                 # build npm-bb:dev
+bb build --no-cache      # rebuild without Docker layer cache
+bb shell                 # build, create a generated home, then open bash
+bb shell --skip-build    # reuse the existing image
+```
+
+`bb shell` creates a writable host directory under `homes/<random-name>` and
+mounts it at `/home/developer` in the container. Before starting Docker it
+copies `~/.pi/agent/auth.json` and `~/.pi/agent/settings.json` into that
+generated home so the agent can run inside the container. Use
+`--project-subdir PATH` to mount a specific host directory instead, and
+`bb homes` / `bb clean --all` to list or remove generated homes.
+
+Common options are available as flags or environment variables:
+
+| Option / env | Default | Effect |
+| ------------ | ------- | ------ |
+| `--image` / `IMAGE` | `npm-bb` | Docker image name |
+| `--tag` / `TAG` | `dev` | Docker image tag |
+| `--node-major` / `NODE_MAJOR` | `24` | Node.js major version build arg |
+| `--no-cache` | `false` | Pass `--no-cache` to `docker build` |
+| `--workdir` / `WORKDIR` | `/home/developer` | Container working directory |
+| `--name` / `DOCKER_STYLE_RANDOM_NAME` | random | Container hostname and generated home name |
+| `--project-subdir` / `PROJECT_SUBDIR` | `homes/<name>` | Host directory mounted into the container |
+| `--docker-run-arg ARG` | _(none)_ | Extra `docker run` argument; repeat as needed |
+| `--dry-run` | `false` | Print commands without executing them |
+
+Run `bb options` for the full option list.
 
 ## Requirements
 

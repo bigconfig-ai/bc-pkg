@@ -271,6 +271,10 @@
       <li><a href="#ex-docker-validate">Docker + task</a></li>
       <li><a href="#ex-bbedn">BB_EDN_REPO explained</a></li>
     </ul>
+    <div class="group-title">Development</div>
+    <ul>
+      <li><a href="#dev-image">Development Docker image</a></li>
+    </ul>
     <div class="group-title">Project</div>
     <ul>
       <li><a href="#requirements">Requirements</a></li>
@@ -562,6 +566,57 @@ npx @bigconfig/bb &lt;args...&gt;    # -&gt; bb &lt;args...&gt;</code></pre>
 <p>Unset it (or run where a <code>bb.edn</code> already exists) and this step is skipped — <code>bb</code> runs against the local project as usual.</p>
 </section>
 
+<section id="dev-image">
+<h2>Development Docker image <a href="#dev-image" class="anchor">#</a></h2>
+<p>
+  This repository also ships a <code>Dockerfile</code> and <code>bb.edn</code>
+  helper tasks for a throwaway development shell. The image is based on Ubuntu
+  24.04 and installs Node.js, the pi coding agent, Claude, <code>ripgrep</code>,
+  <code>fd</code>, and <code>sudo</code>. Requires Docker. The former Makefile
+  workflow now lives in <code>bb.edn</code>; run <code>bb tasks</code> or
+  <code>bb options</code> to inspect it. If <code>bb</code> is not on
+  <code>PATH</code>, use <code>node bin/bb.js &lt;task&gt;</code> to exercise the
+  local launcher instead.
+</p>
+<pre><code>bb tasks                 # list repository tasks
+bb build                 # build npm-bb:dev
+bb build --no-cache      # rebuild without Docker layer cache
+bb shell                 # build, create a generated home, then open bash
+bb shell --skip-build    # reuse the existing image</code></pre>
+<p>
+  <code>bb shell</code> creates a writable host directory under
+  <code>homes/&lt;random-name&gt;</code> and mounts it at
+  <code>/home/developer</code> in the container. Before starting Docker it
+  copies <code>~/.pi/agent/auth.json</code> and
+  <code>~/.pi/agent/settings.json</code> into that generated home so the agent
+  can run inside the container. Use <code>--project-subdir PATH</code> to mount
+  a specific host directory instead.
+</p>
+<table>
+  <tr><th>Task</th><th>Purpose</th></tr>
+  <tr><td><code>bb build</code></td><td>Build the Docker image with host UID/GID and Node major version build args.</td></tr>
+  <tr><td><code>bb shell</code></td><td>Build (unless <code>--skip-build</code>), prepare the generated home, and run an interactive container.</td></tr>
+  <tr><td><code>bb config</code></td><td>Print the resolved image, workspace, command, and option values.</td></tr>
+  <tr><td><code>bb options</code></td><td>Print all supported flags and environment variables.</td></tr>
+  <tr><td><code>bb homes</code></td><td>List generated homes under the configured prefix.</td></tr>
+  <tr><td><code>bb clean --all</code></td><td>Delete all generated homes; pass <code>--project-subdir PATH</code> to delete one explicit directory.</td></tr>
+</table>
+<h3>Common options</h3>
+<table>
+  <tr><th>Option / env</th><th>Default</th><th>Effect</th></tr>
+  <tr><td><code>--image</code> / <code>IMAGE</code></td><td><code>npm-bb</code></td><td>Docker image name</td></tr>
+  <tr><td><code>--tag</code> / <code>TAG</code></td><td><code>dev</code></td><td>Docker image tag</td></tr>
+  <tr><td><code>--node-major</code> / <code>NODE_MAJOR</code></td><td><code>24</code></td><td>Node.js major version build arg</td></tr>
+  <tr><td><code>--no-cache</code></td><td><code>false</code></td><td>Pass <code>--no-cache</code> to <code>docker build</code></td></tr>
+  <tr><td><code>--workdir</code> / <code>WORKDIR</code></td><td><code>/home/developer</code></td><td>Container working directory</td></tr>
+  <tr><td><code>--name</code> / <code>DOCKER_STYLE_RANDOM_NAME</code></td><td>random</td><td>Container hostname and generated home name</td></tr>
+  <tr><td><code>--project-subdir</code> / <code>PROJECT_SUBDIR</code></td><td><code>homes/&lt;name&gt;</code></td><td>Host directory mounted into the container</td></tr>
+  <tr><td><code>--docker-run-arg ARG</code></td><td><em>none</em></td><td>Extra <code>docker run</code> argument; repeat as needed</td></tr>
+  <tr><td><code>--dry-run</code></td><td><code>false</code></td><td>Print commands without executing them</td></tr>
+</table>
+<div class="note"><p>Use <code>bb shell --docker-run-arg=-p --docker-run-arg=3000:3000</code> to publish ports, or <code>bb shell -- COMMAND ...</code> to run a command other than <code>bash</code>.</p></div>
+</section>
+
 <section id="requirements">
 <h2>Requirements <a href="#requirements" class="anchor">#</a></h2>
 <ul>
@@ -586,6 +641,14 @@ npx @bigconfig/bb &lt;args...&gt;    # -&gt; bb &lt;args...&gt;</code></pre>
 <section id="changelog">
 <h2>Changelog <a href="#changelog" class="anchor">#</a></h2>
 <details open>
+<summary><strong>Unreleased — 2026-05-18</strong></summary>
+<ul>
+  <li>Documented the repository development Docker image and <code>bb.edn</code> helper tasks.</li>
+  <li>Moved the development workflow from Makefile targets to babashka tasks.</li>
+  <li>Added <code>bb build --no-cache</code> support for Docker cache-busting rebuilds.</li>
+</ul>
+</details>
+<details>
 <summary><strong>0.2.0 — 2026-05-17</strong></summary>
 <ul>
   <li>bb.edn bootstrap from a GitHub repo via <code>BB_EDN_REPO</code> (pinned to default-branch HEAD; <code>GITHUB_TOKEN</code> support).</li>
@@ -628,7 +691,7 @@ npx @bigconfig/bb &lt;args...&gt;    # -&gt; bb &lt;args...&gt;</code></pre>
 <hr />
 <footer class="page">
   <p>
-    Generated from the project source on 2026-05-17. License: MIT.
+    Generated from the project source on 2026-05-18. License: MIT.
     Maintainer: <a href="https://albertomiorin.com">Alberto Miorin</a>.
   </p>
 </footer>
