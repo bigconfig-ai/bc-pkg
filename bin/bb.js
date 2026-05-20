@@ -427,18 +427,22 @@ const REWRITE_SCRIPT = `(require '[babashka.deps :as deps])
   (spit out (str nodes)))
 `;
 
-// When the cwd has no bb.edn and BB_EDN_REPO=owner/project is set, fetch that
-// repo's bb.edn (pinned to its default-branch HEAD) and add the repo itself
-// as an io.github git dep. Disabled (skipped) if the env var is unset.
-async function ensureBbEdn(bbPath, javaHome) {
-  const repo = process.env.BB_EDN_REPO;
+// Regex for the "owner/project" slug shape. Anchored, no slashes/spaces/@
+// inside either segment — also used at the call site to detect whether the
+// first positional argument is a slug to bootstrap from.
+const REPO_SLUG_RE = /^([^/\s@]+)\/([^/\s@]+)$/;
+
+// When the cwd has no bb.edn and `repo` is "owner/project", fetch that repo's
+// bb.edn (pinned to its default-branch HEAD) and add the repo itself as an
+// io.github git dep. Disabled (skipped) if `repo` is falsy.
+async function ensureBbEdn(bbPath, javaHome, repo) {
   if (!repo) return null; // step disabled — proceed straight to bb
   const target = path.join(process.cwd(), 'bb.edn');
   if (fs.existsSync(target)) return null; // already present — leave it alone
 
-  const m = repo.trim().match(/^([^/\s@]+)\/([^/\s@]+)$/);
+  const m = repo.trim().match(REPO_SLUG_RE);
   if (!m) {
-    throw new Error(`BB_EDN_REPO must be "owner/project" (got "${repo}")`);
+    throw new Error(`repo must be "owner/project" (got "${repo}")`);
   }
   const [, owner, project] = m;
   const slug = `${owner}/${project}`;
@@ -447,7 +451,7 @@ async function ensureBbEdn(bbPath, javaHome) {
   const cr = await ghFetch(`${api}/commits?per_page=1`);
   if (cr.status === 404) {
     throw new Error(
-      `BB_EDN_REPO: ${slug} not found or not accessible ` +
+      `${slug} not found or not accessible ` +
         `(set GITHUB_TOKEN for private repos)`
     );
   }
@@ -538,11 +542,24 @@ function runBb(bbPath, args, javaHome, extraEnv = {}) {
 
 async function main(args) {
   const p = resolvePlatform();
+  // Consume the first positional argument as the bb.edn bootstrap repo only
+  // when it has the shape "owner/project" AND the cwd has no bb.edn — so
+  // when a bb.edn is already present, an argument like `dir/script.clj` is
+  // forwarded to bb instead of being silently swallowed.
+  let repo = null;
+  if (
+    args.length &&
+    REPO_SLUG_RE.test(args[0]) &&
+    !fs.existsSync(path.join(process.cwd(), 'bb.edn'))
+  ) {
+    repo = args[0];
+    args = args.slice(1);
+  }
   const bbPath = await ensureBabashka(p);
   const javaHome = await ensureJdk(p);
   ensureGit();
-  const bootstrapped = await ensureBbEdn(bbPath, javaHome);
-  const extraEnv = bootstrapped ? { BB_EDN_REPO_SHA: bootstrapped.sha } : {};
+  const bootstrapped = await ensureBbEdn(bbPath, javaHome, repo);
+  const extraEnv = bootstrapped ? { BB_BOOTSTRAP_SHA: bootstrapped.sha } : {};
   const code = await runBb(bbPath, args, javaHome, extraEnv);
   process.exit(code);
 }

@@ -148,7 +148,7 @@
 
     (defn dockerfile-pinned-sha [project-dir]
       (first-value (dockerfile-sha-from-bb-edn project-dir)
-                   (env "BB_EDN_REPO_SHA")))
+                   (env "BB_BOOTSTRAP_SHA")))
 
     (defn dockerfile-sha [project-dir]
       (first-value (dockerfile-pinned-sha project-dir)
@@ -174,8 +174,8 @@
               (when (blankish? sha)
                 (throw (ex-info (str "Could not determine Dockerfile SHA for " dockerfile-repo)
                                 {:repo dockerfile-repo
-                                 :hint (str "Run with BB_EDN_REPO=" dockerfile-repo
-                                            " so @bigconfig/bb injects a pinned dep, "
+                                 :hint (str "Pass " dockerfile-repo
+                                            " as the first argument to @bigconfig/bb so it injects a pinned dep, "
                                             "or install git so the repo HEAD can be resolved.")})))
               (println "+ download"
                        (str dockerfile-repo "/Dockerfile@" (short-sha sha))

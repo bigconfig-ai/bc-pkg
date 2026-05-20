@@ -280,7 +280,7 @@
       <li><a href="#ex-local">Local bootstrap</a></li>
       <li><a href="#ex-docker">Docker</a></li>
       <li><a href="#ex-docker-validate">Docker + task</a></li>
-      <li><a href="#ex-bbedn">BB_EDN_REPO explained</a></li>
+      <li><a href="#ex-bbedn">bb.edn bootstrap explained</a></li>
     </ul>
     <div class="group-title">Development</div>
     <ul>
@@ -332,22 +332,23 @@
   <li><strong>Reproducible:</strong> babashka, JDK and rewrite-edn versions are pinned and overridable via env.</li>
   <li><strong>CI / Docker friendly:</strong> works in a bare <code>node</code> container; first run hydrates the cache.</li>
   <li><strong>No system changes:</strong> <code>JAVA_HOME</code>/<code>PATH</code> are scoped to the spawned <code>bb</code> only.</li>
-  <li><strong>Project bootstrap:</strong> <code>BB_EDN_REPO</code> turns any GitHub repo with a <code>bb.edn</code> into a runnable task set.</li>
+  <li><strong>Project bootstrap:</strong> a first-argument <code>owner/project</code> slug turns any GitHub repo with a <code>bb.edn</code> into a runnable task set.</li>
 </ul>
 </section>
 
 <section id="install">
 <h2>Installation &amp; usage <a href="#install" class="anchor">#</a></h2>
 <p>There is nothing to install. Invoke it through <code>npx</code>; every argument is forwarded verbatim to <code>bb</code>, run in the current directory.</p>
-<pre><code>npx @bigconfig/bb@latest tasks        # -&gt; bb tasks
-npx @bigconfig/bb@latest &lt;args...&gt;    # -&gt; bb &lt;args...&gt;</code></pre>
+<pre><code>npx @bigconfig/bb@latest tasks                       # -&gt; bb tasks
+npx @bigconfig/bb@latest &lt;args...&gt;                   # -&gt; bb &lt;args...&gt;
+npx @bigconfig/bb@latest &lt;owner&gt;/&lt;project&gt; &lt;args...&gt; # bootstrap bb.edn, then -&gt; bb &lt;args...&gt;</code></pre>
 <p>Requires <strong>Node.js &gt;= 18</strong>. The package is <code>@bigconfig/bb</code> (scoped) with a single <code>bb</code> bin.</p>
 </section>
 
 <section id="quickstart">
 <h2>Quick start <a href="#quickstart" class="anchor">#</a></h2>
 <p>List the tasks of a GitHub bb project without cloning anything:</p>
-<pre><code>BB_EDN_REPO=bigconfig-ai/once npx @bigconfig/bb@latest tasks</code></pre>
+<pre><code>npx @bigconfig/bb@latest bigconfig-ai/once tasks</code></pre>
 <p>Or fully sandboxed in Docker:</p>
 <pre><code>docker run -it --rm -u node -w /home/node node:24 npx @bigconfig/bb@latest tasks</code></pre>
 <p>See the <a href="#ex-local">Examples</a> for the full set.</p>
@@ -361,7 +362,7 @@ npx @bigconfig/bb@latest &lt;args...&gt;    # -&gt; bb &lt;args...&gt;</code></p
   <li><strong>Babashka:</strong> download &amp; cache if the pinned version is missing.</li>
   <li><strong>JDK:</strong> download &amp; cache Temurin if missing.</li>
   <li><strong>Git (Linux only):</strong> install via the system package manager if <code>git</code> is not on <code>PATH</code>.</li>
-  <li><strong>bb.edn bootstrap:</strong> if <code>BB_EDN_REPO</code> is set and the cwd has no <code>bb.edn</code>, fetch and adapt one.</li>
+  <li><strong>bb.edn bootstrap:</strong> if the first argument has the shape <code>owner/project</code> and the cwd has no <code>bb.edn</code>, fetch and adapt one.</li>
   <li><strong>Run:</strong> spawn <code>bb</code> with your args, cwd = process cwd, <code>JAVA_HOME</code>/<code>PATH</code> pointing at the cached JDK and cached <code>bb</code>. stdio is inherited; the exit code and <code>SIGINT</code>/<code>SIGTERM</code> are forwarded.</li>
 </ol>
 <p>Downloads are lazy (first run only), not done at <code>npm install</code> time.</p>
@@ -427,9 +428,10 @@ npx @bigconfig/bb@latest &lt;args...&gt;    # -&gt; bb &lt;args...&gt;</code></p
 <h2>bb.edn bootstrap <a href="#bbedn" class="anchor">#</a></h2>
 <p>
   When the current directory has <strong>no <code>bb.edn</code></strong> and
-  <code>BB_EDN_REPO=owner/project</code> is set, that repo's
+  the first argument has the shape <code>owner/project</code>, that repo's
   <code>bb.edn</code> is downloaded and the repo itself is added to
-  <code>:deps</code> as a pinned git dependency:
+  <code>:deps</code> as a pinned git dependency (the slug is consumed; the
+  rest of the arguments are forwarded to <code>bb</code>):
 </p>
 <pre><code>io.github.&lt;owner&gt;/&lt;project&gt; {:git/sha "&lt;sha&gt;"}</code></pre>
 <ol>
@@ -441,7 +443,7 @@ npx @bigconfig/bb@latest &lt;args...&gt;    # -&gt; bb &lt;args...&gt;</code></p
   If <code>GITHUB_TOKEN</code> is set it is sent as a bearer token — enabling
   private repos and lifting GitHub's 60 req/hr unauthenticated limit. A missing
   or inaccessible repo, or one without a <code>bb.edn</code>, is a fatal error.
-  Skipped entirely if <code>BB_EDN_REPO</code> is unset or a <code>bb.edn</code>
+  Skipped entirely if no slug argument is given or a <code>bb.edn</code>
   already exists.
 </p>
 <div class="note"><p>The first bootstrap also downloads the Clojure tools (<code>~/.deps.clj/…</code>) plus <code>rewrite-edn</code> (pinned <code>0.5.9</code>, override via <code>REWRITE_EDN_VERSION</code>); both are cached afterward.</p></div>
@@ -464,7 +466,7 @@ npx @bigconfig/bb@latest &lt;args...&gt;    # -&gt; bb &lt;args...&gt;</code></p
 <p>For example <code>bigconfig-ai/once</code> downloads as:</p>
 <pre><code>{:deps {io.github.amiorin/once {:local/root "."}}
  :tasks {:requires ([io.github.amiorin.once.describe :as describe] ...) ...}}</code></pre>
-<p>and is rewritten (with <code>BB_EDN_REPO=bigconfig-ai/once</code>) to:</p>
+<p>and is rewritten (when invoked as <code>npx @bigconfig/bb@latest bigconfig-ai/once …</code>) to:</p>
 <pre><code>{:deps {io.github.bigconfig-ai/once {:git/sha "&lt;sha&gt;"}}
  :tasks {:requires ([io.github.amiorin.once.describe :as describe] ...) ...}}</code></pre>
 </section>
@@ -476,8 +478,7 @@ npx @bigconfig/bb@latest &lt;args...&gt;    # -&gt; bb &lt;args...&gt;</code></p
   <tr><td><code>BB_VERSION</code></td><td><code>1.12.196</code></td><td>babashka release to install</td></tr>
   <tr><td><code>JDK_VERSION</code></td><td><code>21</code></td><td>Temurin feature version (e.g. 17, 21, 25)</td></tr>
   <tr><td><code>REWRITE_EDN_VERSION</code></td><td><code>0.5.9</code></td><td><code>borkdude/rewrite-edn</code> version used to edit <code>bb.edn</code></td></tr>
-  <tr><td><code>BB_EDN_REPO</code></td><td><em>unset</em></td><td><code>owner/project</code> to bootstrap a <code>bb.edn</code> from</td></tr>
-  <tr><td><code>GITHUB_TOKEN</code></td><td><em>unset</em></td><td>Bearer token for <code>BB_EDN_REPO</code> (private repos / rate limit)</td></tr>
+  <tr><td><code>GITHUB_TOKEN</code></td><td><em>unset</em></td><td>Bearer token used during bb.edn bootstrap (private repos / rate limit)</td></tr>
 </table>
 </section>
 
@@ -520,7 +521,7 @@ npx @bigconfig/bb@latest &lt;args...&gt;    # -&gt; bb &lt;args...&gt;</code></p
 <section id="ex-local">
 <h2>Example — local bootstrap <a href="#ex-local" class="anchor">#</a></h2>
 <p>Run the tasks of <code>bigconfig-ai/once</code> with nothing installed and no clone:</p>
-<pre><code>BB_EDN_REPO=bigconfig-ai/once npx @bigconfig/bb@latest tasks</code></pre>
+<pre><code>npx @bigconfig/bb@latest bigconfig-ai/once tasks</code></pre>
 <p>
   First run: downloads babashka + Temurin JDK, fetches the repo's
   <code>bb.edn</code> pinned to its latest commit, strips the
@@ -537,9 +538,8 @@ npx @bigconfig/bb@latest &lt;args...&gt;    # -&gt; bb &lt;args...&gt;</code></p
 <p>
   <code>-u node</code> runs as the non-root <code>node</code> user and
   <code>-w /home/node</code> is its writable home — so the cache lands in
-  <code>/home/node/.cache/bigconfig-bb</code>. With no <code>BB_EDN_REPO</code>
-  and no <code>bb.edn</code> present, <code>bb tasks</code> simply reports no
-  tasks.
+  <code>/home/node/.cache/bigconfig-bb</code>. With no slug argument and no
+  <code>bb.edn</code> present, <code>bb tasks</code> simply reports no tasks.
 </p>
 </section>
 
@@ -547,11 +547,10 @@ npx @bigconfig/bb@latest &lt;args...&gt;    # -&gt; bb &lt;args...&gt;</code></p
 <h2>Example — Docker + repo + task <a href="#ex-docker-validate" class="anchor">#</a></h2>
 <p>
   Same container, but bootstrap <code>bigconfig-ai/once</code> and run its
-  <code>validate</code> task — pass the env var with <code>-e</code>:
+  <code>validate</code> task — pass the repo slug as the first argument:
 </p>
 <pre><code>docker run -it --rm -u node -w /home/node \
-  -e BB_EDN_REPO=bigconfig-ai/once \
-  node:24 npx @bigconfig/bb@latest validate</code></pre>
+  node:24 npx @bigconfig/bb@latest bigconfig-ai/once validate</code></pre>
 <p>
   The launcher writes <code>/home/node/bb.edn</code> (bootstrapped + cleaned),
   then runs <code>bb validate</code> against it. Add
@@ -561,21 +560,22 @@ npx @bigconfig/bb@latest &lt;args...&gt;    # -&gt; bb &lt;args...&gt;</code></p
 </section>
 
 <section id="ex-bbedn">
-<h2>Example — BB_EDN_REPO explained <a href="#ex-bbedn" class="anchor">#</a></h2>
+<h2>Example — bb.edn bootstrap explained <a href="#ex-bbedn" class="anchor">#</a></h2>
 <p>
-  <code>BB_EDN_REPO</code> is the bootstrap switch. When set (and the cwd has
-  no <code>bb.edn</code>) it makes any GitHub repo that ships a
-  <code>bb.edn</code> directly runnable: the file is downloaded pinned to the
-  repo's default-branch HEAD, <code>:local/root</code> deps are stripped, and
-  the repo is added back as a reproducible git dependency.
+  A first-argument <code>owner/project</code> slug is the bootstrap switch.
+  When given (and the cwd has no <code>bb.edn</code>) it makes any GitHub
+  repo that ships a <code>bb.edn</code> directly runnable: the file is
+  downloaded pinned to the repo's default-branch HEAD,
+  <code>:local/root</code> deps are stripped, and the repo is added back as
+  a reproducible git dependency. The slug is consumed; remaining arguments
+  go to <code>bb</code>.
 </p>
 <h3>Local</h3>
-<pre><code>BB_EDN_REPO=bigconfig-ai/once npx @bigconfig/bb@latest validate</code></pre>
+<pre><code>npx @bigconfig/bb@latest bigconfig-ai/once validate</code></pre>
 <h3>Docker</h3>
 <pre><code>docker run -it --rm -u node -w /home/node \
-  -e BB_EDN_REPO=bigconfig-ai/once \
-  node:24 npx @bigconfig/bb@latest tasks</code></pre>
-<p>Unset it (or run where a <code>bb.edn</code> already exists) and this step is skipped — <code>bb</code> runs against the local project as usual.</p>
+  node:24 npx @bigconfig/bb@latest bigconfig-ai/once tasks</code></pre>
+<p>Omit it (or run where a <code>bb.edn</code> already exists) and this step is skipped — <code>bb</code> runs against the local project as usual.</p>
 </section>
 
 <section id="dev-image">
@@ -588,9 +588,9 @@ npx @bigconfig/bb@latest &lt;args...&gt;    # -&gt; bb &lt;args...&gt;</code></p
   workflow now lives in <code>bb.edn</code>; run <code>bb tasks</code> or
   <code>bb options</code> to inspect it. If <code>bb</code> is not on
   <code>PATH</code>, use <code>node bin/bb.js &lt;task&gt;</code> to exercise the
-  local launcher instead. When bootstrapped into an empty directory with
-  <code>BB_EDN_REPO=bigconfig-ai/npm-bb</code>, task config downloads a missing
-  <code>Dockerfile</code> from the same pinned GitHub SHA.
+  local launcher instead. When bootstrapped into an empty directory by
+  passing <code>bigconfig-ai/npm-bb</code> as the first argument, task config
+  downloads a missing <code>Dockerfile</code> from the same pinned GitHub SHA.
 </p>
 <pre><code>bb tasks                 # list repository tasks
 bb build                 # build npm-bb:dev
