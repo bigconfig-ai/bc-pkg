@@ -1,4 +1,4 @@
-# @bigconfig/bb
+# bc-pkg
 
 Run [babashka](https://babashka.org) (`bb`) without installing anything first.
 On its first invocation this package downloads a pinned babashka binary **and**
@@ -8,13 +8,14 @@ to `bb`.
 ## Usage
 
 ```sh
-npx @bigconfig/bb@latest tasks                       # -> bb tasks
-npx @bigconfig/bb@latest <args...>                   # -> bb <args...>
-npx @bigconfig/bb@latest <owner>/<project> <args...> # bootstrap/validate bb.edn, then -> bb <args...>
+npx bc-pkg@latest tasks                       # -> bb tasks
+npx bc-pkg@latest <args...>                   # -> bb <args...>
+npx bc-pkg@latest <owner>/<project> <args...> # bootstrap/validate bb.edn, then -> bb <args...>
 ```
 
-All other arguments (including flags) are passed through verbatim, and `bb`
-runs in your current working directory, so it picks up the local `bb.edn`. If
+The npm package is unscoped `bc-pkg` and exposes a single `bc-pkg` bin. All
+other arguments (including flags) are passed through verbatim, and `bb` runs in
+your current working directory, so it picks up the local `bb.edn`. If
 the first argument has the shape `owner/project`, it is consumed as repo
 identity and never forwarded to `bb`: it bootstraps a missing `bb.edn` or
 validates the existing `bb.edn`'s top-level `:repo`.
@@ -71,7 +72,7 @@ Valid Maven/git deps are kept.
   API rate limit.
 
 ```sh
-npx @bigconfig/bb@latest my-org/shared-tasks tasks
+npx bc-pkg@latest my-org/shared-tasks tasks
 ```
 
 ## Cache location
@@ -80,8 +81,8 @@ A single shared directory, reused across all projects:
 
 | Platform      | Path                                         |
 | ------------- | -------------------------------------------- |
-| macOS / Linux | `$XDG_CACHE_HOME` or `~/.cache` → `bigconfig-bb/` |
-| Windows       | `%LOCALAPPDATA%` → `bigconfig-bb/`           |
+| macOS / Linux | `$XDG_CACHE_HOME` or `~/.cache` → `bc-pkg/` |
+| Windows       | `%LOCALAPPDATA%` → `bc-pkg/`           |
 
 Delete that directory to force a clean reinstall.
 
@@ -113,7 +114,7 @@ This repository also includes a `Dockerfile` and `bb.edn` tasks for a
 throwaway development shell. The former Makefile workflow now lives in
 `bb.edn`. The image is based on Ubuntu 24.04 and installs Node.js, the pi
 coding agent, Claude, `ripgrep`, `fd`, and `sudo`. Requires Docker. Commands
-below assume `bb` is on `PATH`; use `node bin/bb.js <task>` to exercise the
+below assume `bb` is on `PATH`; use `node bin/bc-pkg.js <task>` to exercise the
 local launcher instead.
 
 If these tasks are bootstrapped into an empty directory by passing
@@ -123,7 +124,7 @@ bootstrapped `bb.edn`:
 
 ```sh
 mkdir empty && cd empty
-npx @bigconfig/bb@latest bigconfig-ai/npm-bb shell
+npx bc-pkg@latest bigconfig-ai/npm-bb shell
 ```
 
 ```sh

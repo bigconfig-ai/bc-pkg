@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 
-// @bigconfig/bb — bootstraps babashka + a Temurin JDK on first use, then
+// bc-pkg — bootstraps babashka + a Temurin JDK on first use, then
 // forwards all arguments to `bb`. Single-file launcher, no build step.
 
 const fs = require('fs');
@@ -16,7 +16,7 @@ const DEFAULT_BB_VERSION = process.env.BB_VERSION || '1.12.196';
 const DEFAULT_JDK_VERSION = process.env.JDK_VERSION || '21';
 const REWRITE_EDN_VERSION = process.env.REWRITE_EDN_VERSION || '0.5.9';
 
-const TAG = '[@bigconfig/bb]';
+const TAG = '[bc-pkg]';
 
 function log(msg) {
   // stderr so stdout stays clean for bb's own output.
@@ -88,7 +88,7 @@ function cacheRoot() {
     process.platform === 'win32'
       ? process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local')
       : process.env.XDG_CACHE_HOME || path.join(os.homedir(), '.cache');
-  return path.join(base, 'bigconfig-bb');
+  return path.join(base, 'bc-pkg');
 }
 
 // --- Filesystem helpers --------------------------------------------------
@@ -129,7 +129,7 @@ async function installOnce(finalDir, install) {
 async function download(url, destFile) {
   const res = await fetch(url, {
     redirect: 'follow',
-    headers: { 'user-agent': '@bigconfig/bb' },
+    headers: { 'user-agent': 'bc-pkg' },
   });
   if (!res.ok || !res.body) {
     throw new Error(
@@ -371,7 +371,7 @@ function bbEnv(javaHome, bbPath, extraEnv = {}) {
 
 function ghFetch(url, accept) {
   const headers = {
-    'user-agent': '@bigconfig/bb',
+    'user-agent': 'bc-pkg',
     accept: accept || 'application/vnd.github+json',
     'x-github-api-version': '2022-11-28',
   };

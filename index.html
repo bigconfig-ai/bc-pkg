@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>@bigconfig/bb — Manual</title>
+<title>bc-pkg — Manual</title>
 <link rel="icon" type="image/svg+xml"
       href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3E%3Crect%20width='64'%20height='64'%20rx='12'%20fill='%232f6feb'/%3E%3Ctext%20x='32'%20y='45'%20font-size='34'%20font-family='monospace'%20font-weight='700'%20text-anchor='middle'%20fill='white'%3Ebb%3C/text%3E%3C/svg%3E" />
 <style>
@@ -255,7 +255,7 @@
     <div class="group-title">Start</div>
     <ul>
       <li><a href="#overview">Overview</a></li>
-      <li><a href="#why">Why @bigconfig/bb</a></li>
+      <li><a href="#why">Why bc-pkg</a></li>
       <li><a href="#install">Installation &amp; usage</a></li>
       <li><a href="#quickstart">Quick start</a></li>
     </ul>
@@ -298,18 +298,18 @@
 
 <main>
 
-<h1>@bigconfig/bb</h1>
+<h1>bc-pkg</h1>
 <p class="tagline">
   An <code>npx</code> launcher that bootstraps babashka, a Temurin JDK, git (on
   Linux), and an optional <code>bb.edn</code> on first use — then forwards every
   argument to <code>bb</code>. Zero install:
-  <code>npx @bigconfig/bb@latest tasks</code> becomes <code>bb tasks</code>.
+  <code>npx bc-pkg@latest tasks</code> becomes <code>bb tasks</code>.
 </p>
 
 <section id="overview">
 <h2>Overview <a href="#overview" class="anchor">#</a></h2>
 <p>
-  <code>@bigconfig/bb</code> is a tiny, single-file Node CLI. It resolves the
+  <code>bc-pkg</code> is a tiny, single-file Node CLI. It resolves the
   host OS/CPU, downloads pinned, known-good binaries into a shared user cache
   on first run, optionally bootstraps a <code>bb.edn</code> from GitHub, and
   then execs <code>bb</code> with your arguments. Nothing is changed
@@ -326,7 +326,7 @@
 </section>
 
 <section id="why">
-<h2>Why @bigconfig/bb <a href="#why" class="anchor">#</a></h2>
+<h2>Why bc-pkg <a href="#why" class="anchor">#</a></h2>
 <ul>
   <li><strong>Zero install:</strong> one <code>npx</code> command — no manual babashka/JDK setup.</li>
   <li><strong>Reproducible:</strong> babashka, JDK and rewrite-edn versions are pinned and overridable via env.</li>
@@ -339,18 +339,18 @@
 <section id="install">
 <h2>Installation &amp; usage <a href="#install" class="anchor">#</a></h2>
 <p>There is nothing to install. Invoke it through <code>npx</code>; every argument is forwarded verbatim to <code>bb</code>, run in the current directory.</p>
-<pre><code>npx @bigconfig/bb@latest tasks                       # -&gt; bb tasks
-npx @bigconfig/bb@latest &lt;args...&gt;                   # -&gt; bb &lt;args...&gt;
-npx @bigconfig/bb@latest &lt;owner&gt;/&lt;project&gt; &lt;args...&gt; # bootstrap bb.edn, then -&gt; bb &lt;args...&gt;</code></pre>
-<p>Requires <strong>Node.js &gt;= 18</strong>. The package is <code>@bigconfig/bb</code> (scoped) with a single <code>bb</code> bin.</p>
+<pre><code>npx bc-pkg@latest tasks                       # -&gt; bb tasks
+npx bc-pkg@latest &lt;args...&gt;                   # -&gt; bb &lt;args...&gt;
+npx bc-pkg@latest &lt;owner&gt;/&lt;project&gt; &lt;args...&gt; # bootstrap/validate bb.edn, then -&gt; bb &lt;args...&gt;</code></pre>
+<p>Requires <strong>Node.js &gt;= 18</strong>. The package is unscoped <code>bc-pkg</code> with a single <code>bc-pkg</code> bin.</p>
 </section>
 
 <section id="quickstart">
 <h2>Quick start <a href="#quickstart" class="anchor">#</a></h2>
 <p>List the tasks of a GitHub bb project without cloning anything:</p>
-<pre><code>npx @bigconfig/bb@latest bigconfig-ai/once tasks</code></pre>
+<pre><code>npx bc-pkg@latest bigconfig-ai/once tasks</code></pre>
 <p>Or fully sandboxed in Docker:</p>
-<pre><code>docker run -it --rm -u node -w /home/node node:24 npx @bigconfig/bb@latest tasks</code></pre>
+<pre><code>docker run -it --rm -u node -w /home/node node:24 npx bc-pkg@latest tasks</code></pre>
 <p>See the <a href="#ex-local">Examples</a> for the full set.</p>
 </section>
 
@@ -362,7 +362,7 @@ npx @bigconfig/bb@latest &lt;owner&gt;/&lt;project&gt; &lt;args...&gt; # bootstr
   <li><strong>Babashka:</strong> download &amp; cache if the pinned version is missing.</li>
   <li><strong>JDK:</strong> download &amp; cache Temurin if missing.</li>
   <li><strong>Git (Linux only):</strong> install via the system package manager if <code>git</code> is not on <code>PATH</code>.</li>
-  <li><strong>bb.edn bootstrap:</strong> if the first argument has the shape <code>owner/project</code> and the cwd has no <code>bb.edn</code>, fetch and adapt one.</li>
+  <li><strong>bb.edn bootstrap/validation:</strong> if the first argument has the shape <code>owner/project</code>, consume it; bootstrap a missing <code>bb.edn</code> or validate an existing <code>bb.edn</code>'s top-level <code>:repo</code>.</li>
   <li><strong>Run:</strong> spawn <code>bb</code> with your args, cwd = process cwd, <code>JAVA_HOME</code>/<code>PATH</code> pointing at the cached JDK and cached <code>bb</code>. stdio is inherited; the exit code and <code>SIGINT</code>/<code>SIGTERM</code> are forwarded.</li>
 </ol>
 <p>Downloads are lazy (first run only), not done at <code>npm install</code> time.</p>
@@ -427,11 +427,12 @@ npx @bigconfig/bb@latest &lt;owner&gt;/&lt;project&gt; &lt;args...&gt; # bootstr
 <section id="bbedn">
 <h2>bb.edn bootstrap <a href="#bbedn" class="anchor">#</a></h2>
 <p>
-  When the current directory has <strong>no <code>bb.edn</code></strong> and
-  the first argument has the shape <code>owner/project</code>, that repo's
-  <code>bb.edn</code> is downloaded and the repo itself is added to
-  <code>:deps</code> as a pinned git dependency (the slug is consumed; the
-  rest of the arguments are forwarded to <code>bb</code>):
+  When the first argument has the shape <code>owner/project</code>, it is
+  consumed as repo identity and never forwarded to <code>bb</code>. If the
+  current directory has <strong>no <code>bb.edn</code></strong>, that repo's
+  <code>bb.edn</code> is downloaded, top-level <code>:repo "owner/project"</code>
+  is ensured, and the repo itself is added to <code>:deps</code> as a pinned git
+  dependency:
 </p>
 <pre><code>io.github.&lt;owner&gt;/&lt;project&gt; {:git/sha "&lt;sha&gt;"}</code></pre>
 <ol>
@@ -443,8 +444,10 @@ npx @bigconfig/bb@latest &lt;owner&gt;/&lt;project&gt; &lt;args...&gt; # bootstr
   If <code>GITHUB_TOKEN</code> is set it is sent as a bearer token — enabling
   private repos and lifting GitHub's 60 req/hr unauthenticated limit. A missing
   or inaccessible repo, or one without a <code>bb.edn</code>, is a fatal error.
-  Skipped entirely if no slug argument is given or a <code>bb.edn</code>
-  already exists.
+  If a <code>bb.edn</code> already exists, the slug is compared exactly with
+  top-level <code>:repo</code>; invalid EDN, missing <code>:repo</code>, or a
+  different <code>:repo</code> is fatal. The slug may be omitted when
+  <code>bb.edn</code> exists.
 </p>
 <div class="note"><p>The first bootstrap also downloads the Clojure tools (<code>~/.deps.clj/…</code>) plus <code>rewrite-edn</code> (pinned <code>0.5.9</code>, override via <code>REWRITE_EDN_VERSION</code>); both are cached afterward.</p></div>
 </section>
@@ -466,8 +469,9 @@ npx @bigconfig/bb@latest &lt;owner&gt;/&lt;project&gt; &lt;args...&gt; # bootstr
 <p>For example <code>bigconfig-ai/once</code> downloads as:</p>
 <pre><code>{:deps {io.github.amiorin/once {:local/root "."}}
  :tasks {:requires ([io.github.amiorin.once.describe :as describe] ...) ...}}</code></pre>
-<p>and is rewritten (when invoked as <code>npx @bigconfig/bb@latest bigconfig-ai/once …</code>) to:</p>
-<pre><code>{:deps {io.github.bigconfig-ai/once {:git/sha "&lt;sha&gt;"}}
+<p>and is rewritten (when invoked as <code>npx bc-pkg@latest bigconfig-ai/once …</code>) to:</p>
+<pre><code>{:repo "bigconfig-ai/once"
+ :deps {io.github.bigconfig-ai/once {:git/sha "&lt;sha&gt;"}}
  :tasks {:requires ([io.github.amiorin.once.describe :as describe] ...) ...}}</code></pre>
 </section>
 
@@ -498,10 +502,10 @@ npx @bigconfig/bb@latest &lt;owner&gt;/&lt;project&gt; &lt;args...&gt; # bootstr
 <p>A single shared directory, reused across all projects:</p>
 <table>
   <tr><th>Platform</th><th>Base</th></tr>
-  <tr><td>macOS / Linux</td><td><code>$XDG_CACHE_HOME</code> or <code>~/.cache</code> → <code>bigconfig-bb/</code></td></tr>
-  <tr><td>Windows</td><td><code>%LOCALAPPDATA%</code> → <code>bigconfig-bb/</code></td></tr>
+  <tr><td>macOS / Linux</td><td><code>$XDG_CACHE_HOME</code> or <code>~/.cache</code> → <code>bc-pkg/</code></td></tr>
+  <tr><td>Windows</td><td><code>%LOCALAPPDATA%</code> → <code>bc-pkg/</code></td></tr>
 </table>
-<pre><code>bigconfig-bb/
+<pre><code>bc-pkg/
 ├── bb/&lt;version&gt;/bb            # babashka binary
 └── jdk/&lt;feature&gt;/             # extracted Temurin JDK
     └── .javahome              # recorded JAVA_HOME (relative)</code></pre>
@@ -511,7 +515,7 @@ npx @bigconfig/bb@latest &lt;owner&gt;/&lt;project&gt; &lt;args...&gt; # bootstr
 <section id="passthrough">
 <h2>Passthrough &amp; exit codes <a href="#passthrough" class="anchor">#</a></h2>
 <ul>
-  <li>All arguments (including flags) are passed to <code>bb</code> verbatim.</li>
+  <li>All arguments except a first <code>owner/project</code> repo slug are passed to <code>bb</code> verbatim.</li>
   <li><code>bb</code> runs in the current working directory, so it picks up the local <code>bb.edn</code>.</li>
   <li>stdio is inherited; <code>bb</code>'s exit code is forwarded; <code>SIGINT</code>/<code>SIGTERM</code> are forwarded to the child.</li>
   <li>No arguments → <code>bb</code>'s normal behavior (reads stdin / REPL).</li>
@@ -521,12 +525,12 @@ npx @bigconfig/bb@latest &lt;owner&gt;/&lt;project&gt; &lt;args...&gt; # bootstr
 <section id="ex-local">
 <h2>Example — local bootstrap <a href="#ex-local" class="anchor">#</a></h2>
 <p>Run the tasks of <code>bigconfig-ai/once</code> with nothing installed and no clone:</p>
-<pre><code>npx @bigconfig/bb@latest bigconfig-ai/once tasks</code></pre>
+<pre><code>npx bc-pkg@latest bigconfig-ai/once tasks</code></pre>
 <p>
   First run: downloads babashka + Temurin JDK, fetches the repo's
   <code>bb.edn</code> pinned to its latest commit, strips the
-  <code>:local/root</code> self-dep, injects
-  <code>io.github.bigconfig-ai/once {:git/sha "…"}</code>, writes
+  <code>:local/root</code> self-dep, injects <code>:repo "bigconfig-ai/once"</code>
+  and <code>io.github.bigconfig-ai/once {:git/sha "…"}</code>, writes
   <code>./bb.edn</code>, then runs <code>bb tasks</code>.
 </p>
 </section>
@@ -534,11 +538,11 @@ npx @bigconfig/bb@latest &lt;owner&gt;/&lt;project&gt; &lt;args...&gt; # bootstr
 <section id="ex-docker">
 <h2>Example — Docker <a href="#ex-docker" class="anchor">#</a></h2>
 <p>Fully sandboxed in a stock Node 24 image, as the unprivileged <code>node</code> user:</p>
-<pre><code>docker run -it --rm -u node -w /home/node node:24 npx @bigconfig/bb@latest tasks</code></pre>
+<pre><code>docker run -it --rm -u node -w /home/node node:24 npx bc-pkg@latest tasks</code></pre>
 <p>
   <code>-u node</code> runs as the non-root <code>node</code> user and
   <code>-w /home/node</code> is its writable home — so the cache lands in
-  <code>/home/node/.cache/bigconfig-bb</code>. With no slug argument and no
+  <code>/home/node/.cache/bc-pkg</code>. With no slug argument and no
   <code>bb.edn</code> present, <code>bb tasks</code> simply reports no tasks.
 </p>
 </section>
@@ -550,7 +554,7 @@ npx @bigconfig/bb@latest &lt;owner&gt;/&lt;project&gt; &lt;args...&gt; # bootstr
   <code>validate</code> task — pass the repo slug as the first argument:
 </p>
 <pre><code>docker run -it --rm -u node -w /home/node \
-  node:24 npx @bigconfig/bb@latest bigconfig-ai/once validate</code></pre>
+  node:24 npx bc-pkg@latest bigconfig-ai/once validate</code></pre>
 <p>
   The launcher writes <code>/home/node/bb.edn</code> (bootstrapped + cleaned),
   then runs <code>bb validate</code> against it. Add
@@ -562,20 +566,21 @@ npx @bigconfig/bb@latest &lt;owner&gt;/&lt;project&gt; &lt;args...&gt; # bootstr
 <section id="ex-bbedn">
 <h2>Example — bb.edn bootstrap explained <a href="#ex-bbedn" class="anchor">#</a></h2>
 <p>
-  A first-argument <code>owner/project</code> slug is the bootstrap switch.
-  When given (and the cwd has no <code>bb.edn</code>) it makes any GitHub
-  repo that ships a <code>bb.edn</code> directly runnable: the file is
-  downloaded pinned to the repo's default-branch HEAD,
-  <code>:local/root</code> deps are stripped, and the repo is added back as
-  a reproducible git dependency. The slug is consumed; remaining arguments
-  go to <code>bb</code>.
+  A first-argument <code>owner/project</code> slug is the repo identity switch.
+  When the cwd has no <code>bb.edn</code>, it makes any GitHub repo that ships a
+  <code>bb.edn</code> directly runnable: the file is downloaded pinned to the
+  repo's default-branch HEAD, <code>:repo</code> is injected, <code>:local/root</code>
+  deps are stripped, and the repo is added back as a reproducible git
+  dependency. When <code>bb.edn</code> already exists, the same slug validates
+  top-level <code>:repo</code>. The slug is consumed; remaining arguments go to
+  <code>bb</code>.
 </p>
 <h3>Local</h3>
-<pre><code>npx @bigconfig/bb@latest bigconfig-ai/once validate</code></pre>
+<pre><code>npx bc-pkg@latest bigconfig-ai/once validate</code></pre>
 <h3>Docker</h3>
 <pre><code>docker run -it --rm -u node -w /home/node \
-  node:24 npx @bigconfig/bb@latest bigconfig-ai/once tasks</code></pre>
-<p>Omit it (or run where a <code>bb.edn</code> already exists) and this step is skipped — <code>bb</code> runs against the local project as usual.</p>
+  node:24 npx bc-pkg@latest bigconfig-ai/once tasks</code></pre>
+<p>Omit it when a <code>bb.edn</code> already exists to skip repo validation — <code>bb</code> runs against the local project as usual.</p>
 </section>
 
 <section id="dev-image">
@@ -587,7 +592,7 @@ npx @bigconfig/bb@latest &lt;owner&gt;/&lt;project&gt; &lt;args...&gt; # bootstr
   <code>fd</code>, and <code>sudo</code>. Requires Docker. The former Makefile
   workflow now lives in <code>bb.edn</code>; run <code>bb tasks</code> or
   <code>bb options</code> to inspect it. If <code>bb</code> is not on
-  <code>PATH</code>, use <code>node bin/bb.js &lt;task&gt;</code> to exercise the
+  <code>PATH</code>, use <code>node bin/bc-pkg.js &lt;task&gt;</code> to exercise the
   local launcher instead. When bootstrapped into an empty directory by
   passing <code>bigconfig-ai/npm-bb</code> as the first argument, task config
   downloads a missing <code>Dockerfile</code> from the same pinned GitHub SHA.
@@ -655,8 +660,9 @@ bb shell --skip-build    # reuse the existing image</code></pre>
 <section id="changelog">
 <h2>Changelog <a href="#changelog" class="anchor">#</a></h2>
 <details open>
-<summary><strong>Unreleased — 2026-05-18</strong></summary>
+<summary><strong>1.0.0 — 2026-05-20</strong></summary>
 <ul>
+  <li>Breaking package/bin rename to <code>bc-pkg</code>.</li>
   <li>Documented the repository development Docker image and <code>bb.edn</code> helper tasks.</li>
   <li>Moved the development workflow from Makefile targets to babashka tasks.</li>
   <li>Added <code>bb build --no-cache</code> support for Docker cache-busting rebuilds.</li>
@@ -665,7 +671,7 @@ bb shell --skip-build    # reuse the existing image</code></pre>
 <details>
 <summary><strong>0.2.0 — 2026-05-17</strong></summary>
 <ul>
-  <li>bb.edn bootstrap from a GitHub repo via <code>BB_EDN_REPO</code> (pinned to default-branch HEAD; <code>GITHUB_TOKEN</code> support).</li>
+  <li>bb.edn bootstrap from a GitHub repo via first-argument <code>owner/project</code> (pinned to default-branch HEAD; <code>GITHUB_TOKEN</code> support).</li>
   <li>Repo injected as <code>io.github.&lt;owner&gt;/&lt;project&gt; {:git/sha …}</code> using comment-preserving <code>borkdude/rewrite-edn</code>.</li>
   <li><code>:local/root</code> deps stripped from <code>:deps</code> and task <code>:extra-deps</code>.</li>
 </ul>
@@ -705,7 +711,7 @@ bb shell --skip-build    # reuse the existing image</code></pre>
 <hr />
 <footer class="page">
   <p>
-    Generated from the project source on 2026-05-18. License: MIT.
+    Generated from the project source on 2026-05-20. License: MIT.
     Maintainer: <a href="https://albertomiorin.com">Alberto Miorin</a>.
   </p>
 </footer>

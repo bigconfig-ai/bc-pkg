@@ -1,9 +1,9 @@
 {
-    "name": "@bigconfig/bb",
-    "version": "0.2.0",
+    "name": "bc-pkg",
+    "version": "1.0.0",
     "description": "Bootstrap and run babashka (bb): installs babashka and a Temurin JDK on first use if missing, then forwards all arguments to bb.",
     "bin": {
-        "bb": "bin/bb.js"
+        "bc-pkg": "bin/bc-pkg.js"
     },
     "files": ["bin/", "README.md"],
     "engines": {
