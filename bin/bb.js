@@ -387,6 +387,11 @@ const REWRITE_SCRIPT = `(require '[babashka.deps :as deps])
 (deps/add-deps {:deps {'borkdude/rewrite-edn {:mvn/version (System/getenv "BBEDN_REWRITE_VERSION")}}})
 (require '[borkdude.rewrite-edn :as r])
 
+(defn fail! [msg]
+  (binding [*out* *err*]
+    (println msg))
+  (System/exit 1))
+
 (defn local-root? [coord]
   (and (map? coord) (contains? coord :local/root)))
 
@@ -406,8 +411,20 @@ const REWRITE_SCRIPT = `(require '[babashka.deps :as deps])
       owner (System/getenv "BBEDN_OWNER")
       proj  (System/getenv "BBEDN_PROJECT")
       sha   (System/getenv "BBEDN_SHA")
+      repo  (System/getenv "BBEDN_REPO")
       dep   (symbol (str "io.github." owner) proj)
       nodes (r/parse-string (slurp in))
+      data  (r/sexpr nodes)
+      existing-repo (if (and (map? data) (contains? data :repo))
+                      (:repo data)
+                      ::missing)
+      _validate-map (when-not (map? data)
+                      (fail! "Downloaded bb.edn must contain a top-level EDN map"))
+      _validate-repo (when (and (not= ::missing existing-repo)
+                                (not= existing-repo repo))
+                       (fail! (str "Downloaded bb.edn :repo " (pr-str existing-repo)
+                                   " does not match CLI repo " (pr-str repo))))
+      nodes (if (= ::missing existing-repo) (r/assoc nodes :repo repo) nodes)
       ;; 1. strip :local/root from top-level :deps
       nodes (if (r/get nodes :deps)
               (r/update nodes :deps strip-local-root)
@@ -427,27 +444,96 @@ const REWRITE_SCRIPT = `(require '[babashka.deps :as deps])
   (spit out (str nodes)))
 `;
 
-// When the cwd has no bb.edn and BB_EDN_REPO=owner/project is set, fetch that
-// repo's bb.edn (pinned to its default-branch HEAD) and add the repo itself
-// as an io.github git dep. Disabled (skipped) if the env var is unset.
-async function ensureBbEdn(bbPath, javaHome) {
-  const repo = process.env.BB_EDN_REPO;
-  if (!repo) return null; // step disabled — proceed straight to bb
-  const target = path.join(process.cwd(), 'bb.edn');
-  if (fs.existsSync(target)) return null; // already present — leave it alone
+const VALIDATE_REPO_SCRIPT = `(require '[clojure.edn :as edn])
 
-  const m = repo.trim().match(/^([^/\s@]+)\/([^/\s@]+)$/);
-  if (!m) {
-    throw new Error(`BB_EDN_REPO must be "owner/project" (got "${repo}")`);
+(defn fail! [msg]
+  (binding [*out* *err*]
+    (println msg))
+  (System/exit 1))
+
+(let [target    (System/getenv "BBEDN_TARGET")
+      cli-repo  (System/getenv "BBEDN_REPO")
+      data      (try
+                  (edn/read-string (slurp target))
+                  (catch Exception e
+                    (fail! (str "Invalid bb.edn: " (.getMessage e)))))
+      has-repo? (and (map? data) (contains? data :repo))
+      file-repo (when has-repo? (:repo data))]
+  (when-not (map? data)
+    (fail! "Invalid bb.edn: expected top-level EDN map"))
+  (when-not has-repo?
+    (fail! (str "bb.edn exists but does not contain :repo; omit the CLI repo or add :repo "
+                (pr-str cli-repo))))
+  (when-not (= file-repo cli-repo)
+    (fail! (str "bb.edn :repo " (pr-str file-repo)
+                " does not match CLI repo " (pr-str cli-repo)))))
+`;
+
+// Regex for the "owner/project" slug shape. Anchored, no slashes/spaces/@
+// inside either segment. When present as the first argument, it is consumed as
+// repo identity and never forwarded to bb.
+const REPO_SLUG_RE = /^([^/\s@]+)\/([^/\s@]+)$/;
+
+function validateBbEdnRepo(bbPath, javaHome, target, repo) {
+  const targetPath = path.resolve(target);
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'bb-edn-validate-'));
+  try {
+    const script = path.join(tmp, 'validate-repo.clj');
+    fs.writeFileSync(script, VALIDATE_REPO_SCRIPT);
+    const r = spawnSync(bbPath, [script], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      encoding: 'utf8',
+      cwd: tmp,
+      env: bbEnv(javaHome, bbPath, {
+        BBEDN_TARGET: targetPath,
+        BBEDN_REPO: repo,
+      }),
+    });
+    if (r.error || r.status !== 0) {
+      const details = [r.stderr, r.stdout]
+        .filter(Boolean)
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .join('\n');
+      const why = r.error ? r.error.message : `exit ${r.status}`;
+      throw new Error(details || `bb.edn repo validation failed (${why})`);
+    }
+  } finally {
+    rmrf(tmp);
   }
-  const [, owner, project] = m;
-  const slug = `${owner}/${project}`;
+}
+
+// If bb.edn exists and a CLI repo was provided, validate its top-level :repo.
+// Otherwise, when cwd has no bb.edn and `repo` is "owner/project", fetch that
+// repo's bb.edn (pinned to its default-branch HEAD), inject top-level :repo,
+// and add the repo itself as an io.github git dep.
+async function ensureBbEdn(bbPath, javaHome, repo) {
+  let owner = null;
+  let project = null;
+  let slug = null;
+  if (repo) {
+    const m = repo.match(REPO_SLUG_RE);
+    if (!m) {
+      throw new Error(`repo must be "owner/project" (got "${repo}")`);
+    }
+    owner = m[1];
+    project = m[2];
+    slug = `${owner}/${project}`;
+  }
+
+  const target = path.join(process.cwd(), 'bb.edn');
+  if (fs.existsSync(target)) {
+    if (repo) validateBbEdnRepo(bbPath, javaHome, target, slug);
+    return null;
+  }
+  if (!repo) return null; // step disabled — proceed straight to bb
+
   const api = `https://api.github.com/repos/${owner}/${project}`;
 
   const cr = await ghFetch(`${api}/commits?per_page=1`);
   if (cr.status === 404) {
     throw new Error(
-      `BB_EDN_REPO: ${slug} not found or not accessible ` +
+      `${slug} not found or not accessible ` +
         `(set GITHUB_TOKEN for private repos)`
     );
   }
@@ -483,17 +569,26 @@ async function ensureBbEdn(bbPath, javaHome) {
       BBEDN_OUT: target,
       BBEDN_OWNER: owner,
       BBEDN_PROJECT: project,
+      BBEDN_REPO: slug,
       BBEDN_SHA: sha,
       BBEDN_REWRITE_VERSION: REWRITE_EDN_VERSION,
     });
     const r = spawnSync(bbPath, [script], {
-      stdio: ['ignore', 'ignore', 'inherit'],
-      cwd: process.cwd(),
+      stdio: ['ignore', 'pipe', 'pipe'],
+      encoding: 'utf8',
+      cwd: tmp,
       env,
     });
     if (r.error || r.status !== 0) {
+      const details = [r.stderr, r.stdout]
+        .filter(Boolean)
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .join('\n');
       const why = r.error ? r.error.message : `exit ${r.status}`;
-      throw new Error(`failed to write bb.edn via rewrite-edn (${why})`);
+      throw new Error(
+        details || `failed to write bb.edn via rewrite-edn (${why})`
+      );
     }
     if (!fs.existsSync(target)) {
       throw new Error('rewrite-edn step did not produce a bb.edn');
@@ -538,11 +633,19 @@ function runBb(bbPath, args, javaHome, extraEnv = {}) {
 
 async function main(args) {
   const p = resolvePlatform();
+  // Consume the first positional argument as repo identity whenever it has
+  // the shape "owner/project". It is never forwarded to bb: with no bb.edn it
+  // bootstraps one, and with an existing bb.edn it validates top-level :repo.
+  let repo = null;
+  if (args.length && REPO_SLUG_RE.test(args[0])) {
+    repo = args[0];
+    args = args.slice(1);
+  }
   const bbPath = await ensureBabashka(p);
   const javaHome = await ensureJdk(p);
   ensureGit();
-  const bootstrapped = await ensureBbEdn(bbPath, javaHome);
-  const extraEnv = bootstrapped ? { BB_EDN_REPO_SHA: bootstrapped.sha } : {};
+  const bootstrapped = await ensureBbEdn(bbPath, javaHome, repo);
+  const extraEnv = bootstrapped ? { BB_BOOTSTRAP_SHA: bootstrapped.sha } : {};
   const code = await runBb(bbPath, args, javaHome, extraEnv);
   process.exit(code);
 }
@@ -560,5 +663,6 @@ module.exports = {
   cacheRoot,
   findJavaHome,
   ensureGit,
+  validateBbEdnRepo,
   ensureBbEdn,
 };

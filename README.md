@@ -8,12 +8,16 @@ to `bb`.
 ## Usage
 
 ```sh
-npx @bigconfig/bb@latest tasks        # -> bb tasks
-npx @bigconfig/bb@latest <args...>    # -> bb <args...>
+npx @bigconfig/bb@latest tasks                       # -> bb tasks
+npx @bigconfig/bb@latest <args...>                   # -> bb <args...>
+npx @bigconfig/bb@latest <owner>/<project> <args...> # bootstrap/validate bb.edn, then -> bb <args...>
 ```
 
-All arguments (including flags) are passed through verbatim, and `bb` runs in
-your current working directory, so it picks up the local `bb.edn`.
+All other arguments (including flags) are passed through verbatim, and `bb`
+runs in your current working directory, so it picks up the local `bb.edn`. If
+the first argument has the shape `owner/project`, it is consumed as repo
+identity and never forwarded to `bb`: it bootstraps a missing `bb.edn` or
+validates the existing `bb.edn`'s top-level `:repo`.
 
 ## What happens on first run
 
@@ -23,7 +27,8 @@ your current working directory, so it picks up the local `bb.edn`.
 3. A Temurin JDK is downloaded from the Adoptium API and cached.
 4. On Linux, `git` is installed via the system package manager if it is not on
    `PATH`.
-5. If requested, a `bb.edn` is bootstrapped from `BB_EDN_REPO`.
+5. If a `<owner>/<project>` slug is the first argument, it is consumed; it
+   bootstraps a missing `bb.edn` or validates an existing `bb.edn`'s `:repo`.
 6. `bb` is launched with `JAVA_HOME` / `PATH` pointing at the cached JDK (and
    the cached `bb`, so nested `bb` calls work) — the environment change applies
    **only** to the `bb` subprocess.
@@ -42,23 +47,31 @@ avoid this entirely.
 
 ## bb.edn bootstrap (optional)
 
-If the current directory has **no `bb.edn`** and `BB_EDN_REPO=owner/project`
-is set, that repo's `bb.edn` is downloaded (pinned to its default branch's
-latest commit) and the repo itself is added to `:deps` as
+If the current directory has **no `bb.edn`** and the first argument has the
+shape `owner/project`, that repo's `bb.edn` is downloaded (pinned to its
+default branch's latest commit), top-level `:repo "owner/project"` is ensured,
+and the repo itself is added to `:deps` as
 `io.github.<owner>/<project> {:git/sha "<sha>"}`. The edit is done with
 `borkdude/rewrite-edn`, so existing comments and formatting are preserved.
+The slug is consumed; remaining arguments are forwarded to `bb`.
+
+If a `bb.edn` already exists, the same slug is still consumed and compared
+exactly with top-level `:repo`. The slug may be omitted when `bb.edn` exists.
 
 Any dependency using `:local/root` (in `:deps` or a task's `:extra-deps`) is
 removed first, since those paths don't exist once the file is downloaded.
 Valid Maven/git deps are kept.
 
-- Skipped entirely if `BB_EDN_REPO` is unset or a `bb.edn` already exists.
-- Fatal error if the repo is missing/inaccessible or has no `bb.edn`.
+- Skipped if no slug is given and no `bb.edn` needs to be created.
+- Fatal error, when a slug is supplied, if an existing `bb.edn` is invalid,
+  lacks `:repo`, or has a different `:repo`.
+- Fatal error if the repo is missing/inaccessible, has no `bb.edn`, or its
+  `bb.edn` declares a different `:repo`.
 - Set `GITHUB_TOKEN` for private repos or to avoid GitHub's unauthenticated
   API rate limit.
 
 ```sh
-BB_EDN_REPO=my-org/shared-tasks npx @bigconfig/bb@latest tasks
+npx @bigconfig/bb@latest my-org/shared-tasks tasks
 ```
 
 ## Cache location
@@ -78,8 +91,7 @@ Delete that directory to force a clean reinstall.
 | --------------------- | ---------- | ----------------------------------------------- |
 | `BB_VERSION`          | `1.12.196` | babashka release version to install             |
 | `JDK_VERSION`         | `21`       | Temurin feature version (e.g. `17`, `21`, `25`) |
-| `BB_EDN_REPO`         | _(unset)_  | `owner/project` to bootstrap a `bb.edn` from (see below) |
-| `GITHUB_TOKEN`        | _(unset)_  | Used for `BB_EDN_REPO` (private repos / higher API rate limit) |
+| `GITHUB_TOKEN`        | _(unset)_  | Used for the bb.edn bootstrap (private repos / higher API rate limit) |
 | `REWRITE_EDN_VERSION` | `0.5.9`    | `borkdude/rewrite-edn` version used to edit the `bb.edn` |
 
 ## Supported platforms
@@ -104,13 +116,14 @@ coding agent, Claude, `ripgrep`, `fd`, and `sudo`. Requires Docker. Commands
 below assume `bb` is on `PATH`; use `node bin/bb.js <task>` to exercise the
 local launcher instead.
 
-If these tasks are bootstrapped into an empty directory with
-`BB_EDN_REPO=bigconfig-ai/npm-bb`, the missing `Dockerfile` is downloaded into
-that directory from the same pinned GitHub SHA as the bootstrapped `bb.edn`:
+If these tasks are bootstrapped into an empty directory by passing
+`bigconfig-ai/npm-bb` as the first argument, the missing `Dockerfile` is
+downloaded into that directory from the same pinned GitHub SHA as the
+bootstrapped `bb.edn`:
 
 ```sh
 mkdir empty && cd empty
-BB_EDN_REPO=bigconfig-ai/npm-bb npx @bigconfig/bb@latest shell
+npx @bigconfig/bb@latest bigconfig-ai/npm-bb shell
 ```
 
 ```sh
