@@ -594,11 +594,11 @@ npx bc-pkg@latest &lt;owner&gt;/&lt;project&gt; &lt;args...&gt; # bootstrap/vali
   <code>bb options</code> to inspect it. If <code>bb</code> is not on
   <code>PATH</code>, use <code>node bin/bc-pkg.js &lt;task&gt;</code> to exercise the
   local launcher instead. When bootstrapped into an empty directory by
-  passing <code>bigconfig-ai/npm-bb</code> as the first argument, task config
+  passing <code>bigconfig-ai/bc-pkg</code> as the first argument, task config
   downloads a missing <code>Dockerfile</code> from the same pinned GitHub SHA.
 </p>
 <pre><code>bb tasks                 # list repository tasks
-bb build                 # build npm-bb:dev
+bb build                 # build bc-pkg:dev
 bb build --no-cache      # rebuild without Docker layer cache
 bb shell                 # build, create a generated home, then open bash
 bb shell --skip-build    # reuse the existing image</code></pre>
@@ -623,7 +623,7 @@ bb shell --skip-build    # reuse the existing image</code></pre>
 <h3>Common options</h3>
 <table>
   <tr><th>Option / env</th><th>Default</th><th>Effect</th></tr>
-  <tr><td><code>--image</code> / <code>IMAGE</code></td><td><code>npm-bb</code></td><td>Docker image name</td></tr>
+  <tr><td><code>--image</code> / <code>IMAGE</code></td><td><code>bc-pkg</code></td><td>Docker image name</td></tr>
   <tr><td><code>--tag</code> / <code>TAG</code></td><td><code>dev</code></td><td>Docker image tag</td></tr>
   <tr><td><code>--node-major</code> / <code>NODE_MAJOR</code></td><td><code>24</code></td><td>Node.js major version build arg</td></tr>
   <tr><td><code>--no-cache</code></td><td><code>false</code></td><td>Pass <code>--no-cache</code> to <code>docker build</code></td></tr>
@@ -662,7 +662,7 @@ bb shell --skip-build    # reuse the existing image</code></pre>
 <details open>
 <summary><strong>1.0.0 — 2026-05-20</strong></summary>
 <ul>
-  <li>Breaking package/bin rename to <code>bc-pkg</code>.</li>
+  <li>Breaking package/bin and repository rename to <code>bc-pkg</code>.</li>
   <li>Documented the repository development Docker image and <code>bb.edn</code> helper tasks.</li>
   <li>Moved the development workflow from Makefile targets to babashka tasks.</li>
   <li>Added <code>bb build --no-cache</code> support for Docker cache-busting rebuilds.</li>

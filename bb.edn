@@ -1,4 +1,4 @@
-{:repo "bigconfig-ai/npm-bb"
+{:repo "bigconfig-ai/bc-pkg"
  :tasks
  {:requires ([babashka.curl :as curl]
              [babashka.fs :as fs]
@@ -19,7 +19,7 @@
        (re-pattern "\\s+")))
 
     (def option-specs
-      {"--image"            {:key :image :env "IMAGE" :default "npm-bb" :value "NAME"
+      {"--image"            {:key :image :env "IMAGE" :default "bc-pkg" :value "NAME"
                              :doc "Docker image name"}
        "--tag"              {:key :tag :env "TAG" :default "dev" :value "TAG"
                              :doc "Docker image tag"}
@@ -70,9 +70,9 @@
        "--all" "--help"])
 
     (def dockerfile-owner "bigconfig-ai")
-    (def dockerfile-project "npm-bb")
+    (def dockerfile-project "bc-pkg")
     (def dockerfile-repo (str dockerfile-owner "/" dockerfile-project))
-    (def dockerfile-dep 'io.github.bigconfig-ai/npm-bb)
+    (def dockerfile-dep 'io.github.bigconfig-ai/bc-pkg)
 
     (defn blankish? [x]
       (or (nil? x) (and (string? x) (str/blank? x))))
@@ -244,7 +244,7 @@
           (println)
           (println "Examples:")
           (println "  bb shell")
-          (println "  bb shell --image npm-bb --tag dev")
+          (println "  bb shell --image bc-pkg --tag dev")
           (println "  bb shell --docker-run-arg=-p --docker-run-arg=3000:3000")
           (println "  bb shell --skip-build -- bash -lc 'node --version'")
           (println "  bb build --no-cache")
@@ -266,7 +266,7 @@
               project-subdir (str (fs/absolutize
                                     (or project-subdir-override
                                         (str (fs/path project-dir prefix name)))))
-              image (resolved-option cli :image "IMAGE" "npm-bb")
+              image (resolved-option cli :image "IMAGE" "bc-pkg")
               tag (resolved-option cli :tag "TAG" "dev")
               docker-run-args (resolved-option cli :docker-run-args "DOCKER_RUN_ARGS" nil)
               cfg {:image image

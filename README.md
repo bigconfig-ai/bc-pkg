@@ -118,18 +118,18 @@ below assume `bb` is on `PATH`; use `node bin/bc-pkg.js <task>` to exercise the
 local launcher instead.
 
 If these tasks are bootstrapped into an empty directory by passing
-`bigconfig-ai/npm-bb` as the first argument, the missing `Dockerfile` is
+`bigconfig-ai/bc-pkg` as the first argument, the missing `Dockerfile` is
 downloaded into that directory from the same pinned GitHub SHA as the
 bootstrapped `bb.edn`:
 
 ```sh
 mkdir empty && cd empty
-npx bc-pkg@latest bigconfig-ai/npm-bb shell
+npx bc-pkg@latest bigconfig-ai/bc-pkg shell
 ```
 
 ```sh
 bb tasks                 # list repository tasks
-bb build                 # build npm-bb:dev
+bb build                 # build bc-pkg:dev
 bb build --no-cache      # rebuild without Docker layer cache
 bb shell                 # build, create a generated home, then open bash
 bb shell --skip-build    # reuse the existing image
@@ -146,7 +146,7 @@ Common options are available as flags or environment variables:
 
 | Option / env | Default | Effect |
 | ------------ | ------- | ------ |
-| `--image` / `IMAGE` | `npm-bb` | Docker image name |
+| `--image` / `IMAGE` | `bc-pkg` | Docker image name |
 | `--tag` / `TAG` | `dev` | Docker image tag |
 | `--node-major` / `NODE_MAJOR` | `24` | Node.js major version build arg |
 | `--no-cache` | `false` | Pass `--no-cache` to `docker build` |
