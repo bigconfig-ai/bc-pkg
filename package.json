@@ -1,15 +1,15 @@
 {
-    "name": "bc-pkg",
-    "version": "1.0.0",
-    "description": "Bootstrap and run babashka (bb): installs babashka and a Temurin JDK on first use if missing, then forwards all arguments to bb.",
-    "bin": {
-        "bc-pkg": "bin/bc-pkg.js"
-    },
-    "files": ["bin/", "README.md"],
-    "engines": {
-        "node": ">=18"
-    },
-    "keywords": ["babashka", "bb", "clojure", "jdk", "cli"],
-    "license": "MIT",
-    "type": "commonjs"
+  "name": "bc-pkg",
+  "version": "1.0.0",
+  "description": "Create and run a BigConfig CLI from a language-specific GitHub package.",
+  "bin": {
+    "bc-pkg": "bin/bc-pkg.js"
+  },
+  "files": ["bin/", "README.md"],
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": ["bigconfig", "cli", "launcher", "clojure", "typescript", "python"],
+  "license": "MIT",
+  "type": "commonjs"
 }
