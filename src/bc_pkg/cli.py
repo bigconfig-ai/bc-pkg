@@ -521,10 +521,7 @@ def run_target(meta: Metadata, args: list[str]) -> int:
         return run_command("node", [meta.run, *args])
     if meta.language == "python":
         ensure_target_deps(meta)
-        py = which_python()
-        if py is None:
-            die("python3 or python is required but was not found on PATH.")
-        return run_command(py, [meta.run, *args])
+        return run_command("uv", ["run", "python", meta.run, *args])
     if meta.language == "clojure":
         p = resolve_platform()
         bb_path = ensure_babashka(p)

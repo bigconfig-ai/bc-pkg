@@ -33,7 +33,7 @@ directory and writes language-native metadata:
 | --- | --- | --- |
 | Clojure | `deps.edn` | `bb run ...` |
 | TypeScript | `package.json` | `node run ...` |
-| Python | `pyproject.toml` | `python run ...` |
+| Python | `pyproject.toml` | `uv run python run ...` |
 
 For Clojure targets, a small `bb.edn` runtime dependency file is also written so
 Babashka can load the pinned Git dependency.
