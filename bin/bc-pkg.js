@@ -368,8 +368,7 @@ async function runTarget(meta, args) {
   }
   if (meta.language === 'python') {
     await ensureTargetDeps(meta);
-    const py = whichPython();
-    return await runCommand(py, ['run', ...args]);
+    return await runCommand('uv', ['run', 'python', meta.run || 'run', ...args]);
   }
   if (meta.language === 'clojure') {
     const p = resolvePlatform();
