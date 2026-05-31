@@ -41,6 +41,17 @@ There is no test suite. Behavioural parity with `launcher/typescript` is verifie
 
 ## Behaviour Contract
 
+0. **Local vs. GitHub targets.** The first argument may be a **local path**
+   (`is_local_spec`: starts with `/`, `./`, `../`, `~`, or is `.`/`..`) instead
+   of `owner/repo@ref`. Local targets are for live local dev: no SHA, no GitHub
+   round-trip. They resolve to a `LocalSpec` (absolute, realpath'd), read
+   manifests/`run` from disk (`read_local_file`, `detect_target_local`), write
+   native **local-path** deps (`:local/root` / `file:` / editable
+   `[tool.uv.sources]`), record `local = true` + `path` in the metadata block
+   (no `repo`/`ref`/`sha`), **symlink** the `run` file (copy fallback,
+   `link_run_file`), and refuse when the resolved path equals cwd. The rest of
+   the contract below is the GitHub path.
+
 1. **Spec parsing** (`parse_spec`): `owner/repo@ref` where `ref` is a branch, tag, or full 40-char SHA. Anything else is treated as forwarded args.
 2. **Ref resolution** (`resolve_ref`): full SHA passes through (lowercased); otherwise hits `GET /repos/{owner}/{repo}/commits/{ref}` and uses `data.sha`. `GITHUB_TOKEN` is sent as `Bearer` when set.
 3. **Target detection** (`detect_target`): fetches `deps.edn`, `package.json`, `pyproject.toml` from the pinned SHA. Exactly **one** must exist; otherwise it fails. The match selects the target language. TS/Python use the package name from the manifest; Clojure synthesises `io.github.{owner}/{repo}`.
@@ -48,10 +59,10 @@ There is no test suite. Behavioural parity with `launcher/typescript` is verifie
    - **Clojure** → `deps.edn` (with `:bigconfig/{repo,ref,sha,language,run}` metadata keys) **and** `bb.edn` (runtime deps only — Babashka reads `bb.edn`, not `deps.edn`).
    - **TypeScript** → `package.json` with `type: "module"`, `scripts.run = "node run"`, the target package as a `github:owner/repo#sha` dependency, and a `bigconfig` block.
    - **Python** → `pyproject.toml` (`name = "bigconfig-cli"`, `requires-python = ">=3.12"`) with the target as a Git PEP 508 dep and a `[tool.bigconfig]` block.
-5. **Re-entry**: `read_metadata` parses the manifest's `bigconfig` block (preferring `tomllib` for pyproject; falling back to regex). If an `owner/repo@ref` is also passed, `validate_existing_metadata` requires repo/ref/sha to match — mismatch is a hard error, not an implicit update.
+5. **Re-entry**: `read_metadata` parses the manifest's `bigconfig` block (preferring `tomllib` for pyproject; falling back to regex). Its completeness check branches on the `local` marker (local requires `path` + `language`; GitHub requires `repo`/`ref`/`sha` + `language`). If an `owner/repo@ref` is also passed, `validate_existing_metadata` requires repo/ref/sha to match; if a local path is passed, `validate_existing_local_metadata` requires the resolved path to match. Switching between local and GitHub (or to a different local path) is a hard error, not an implicit update.
 6. **Run** (`run_target`):
    - TS → `npm install` if `node_modules/` missing, then `node run <args>`.
-   - Python → `uv sync` if `.venv/` missing, then `uv run python run <args>`. `_expose_python_resources` symlinks (or copies) `.venv/.../site-packages/resources` to `./resources` so BigConfig's renderer can find template data shipped via wheels.
+   - Python → `uv sync` if `.venv/` missing, then `uv run python run <args>`. `_expose_python_resources(meta)` symlinks (or copies) `resources/` to `./resources` so BigConfig's renderer can find template data — from `.venv/.../site-packages/resources` for wheel installs, or from the local source tree (`<path>/src/resources` or `<path>/resources`) for editable local targets.
    - Clojure → resolve platform, download pinned Babashka (`BB_VERSION`, default `1.12.196`) and Temurin JDK (`JDK_VERSION`, default `21`) into `cache_root()/bb/<v>` and `cache_root()/jdk/<v>`, ensure `git` is on PATH (auto-installs via apt/dnf/yum/zypper/pacman/apk on Linux with `sudo` when needed), then exec `bb run <args>` with `JAVA_HOME` and the JDK + bb dirs prepended to `PATH`.
 7. **`run` file restoration**: if `meta.run` is missing on re-entry, refetch it from the pinned SHA before forwarding.
 
@@ -82,11 +93,13 @@ These two launchers must stay equivalent. When changing one, mirror the other in
 | Concern | Source of truth |
 |---|---|
 | Spec / SHA regex | `FULL_SHA_RE`, `SPEC_RE` in both |
-| Manifest shapes (deps.edn / package.json / pyproject.toml) | Both `write_*_manifest` |
+| Local-path detection | `is_local_spec` / `isLocalSpec` in both |
+| Manifest shapes (deps.edn / package.json / pyproject.toml) | Both `write_*_manifest` (GitHub) and `write_*_manifest_local` (local) |
 | Cache root layout | `cache_root` in both |
 | Default `BB_VERSION`, `JDK_VERSION` | Constants at top of `cli.py` / `bc-pkg.js` |
 | Git auto-install matrix (Linux only) | `ensure_git` in both |
-| Re-init error semantics | `validate_existing_metadata` in both |
+| Re-init error semantics | `validate_existing_metadata` + `validate_existing_local_metadata` in both |
+| Python `resources/` exposure (incl. editable layout) | `_expose_python_resources` / `exposePythonResources` in both |
 
 If you find a behavioural divergence, treat it as a bug.
 
@@ -95,7 +108,8 @@ If you find a behavioural divergence, treat it as a bug.
 - Do not add runtime dependencies. Stdlib only.
 - Do not import from `big-config` / `once` / `selmer` — the launcher is independent of the BigConfig library chain.
 - Do not change the on-disk artifact shape without also updating `launcher/typescript`.
-- Do not silently auto-upgrade an initialised directory; mismatched repo/ref/sha is a hard error.
+- Do not silently auto-upgrade an initialised directory; mismatched repo/ref/sha (or local path, or local↔GitHub switch) is a hard error.
+- Do not let a local target overwrite the package's own manifest: refuse when the resolved local path equals cwd. Local `run` files are symlinked, not copied.
 - Do not assume the cache root is writable atomically — go through `install_once`.
 
 ## Git

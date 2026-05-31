@@ -48,6 +48,15 @@ class Spec:
 
 
 @dataclass(frozen=True)
+class LocalSpec:
+    path: Path  # resolved absolute path to the local target package
+
+    @property
+    def name(self) -> str:
+        return self.path.name
+
+
+@dataclass(frozen=True)
 class Target:
     language: str
     package_name: str | None = None
@@ -55,12 +64,14 @@ class Target:
 
 @dataclass(frozen=True)
 class Metadata:
-    repo: str
-    ref: str
-    sha: str
+    repo: str | None
+    ref: str | None
+    sha: str | None
     language: str
     run: str = "run"
     package_name: str | None = None
+    local: bool = False
+    path: str | None = None
     manifest: Path | None = None
 
 
@@ -76,9 +87,11 @@ def usage() -> str:
     return (
         "Usage:\n"
         "  bc-pkg <owner/repo@ref> <args...>\n"
+        "  bc-pkg <local-path> <args...>\n"
         "  bc-pkg <args...>\n\n"
         "Examples:\n"
         "  uvx bc-pkg bigconfig-ai/once@python package validate\n"
+        "  uvx bc-pkg ../once/python package validate\n"
         "  uvx bc-pkg package validate"
     )
 
@@ -137,6 +150,33 @@ def parse_spec(arg: str | None) -> Spec | None:
     if not m:
         return None
     return Spec(m.group(1), m.group(2), m.group(3))
+
+
+def is_local_spec(arg: str | None) -> bool:
+    # A normal local path: leading slash, dot-slash, or tilde. Bare names with no
+    # path prefix are treated as forwarded args, not local targets.
+    if not arg:
+        return False
+    if arg in (".", ".."):
+        return True
+    if arg.startswith(("/", "~")) or arg.startswith("./") or arg.startswith("../"):
+        return True
+    if os.name == "nt":
+        if arg.startswith((".\\", "..\\", "\\")):
+            return True
+        if re.match(r"^[A-Za-z]:[\\/]", arg):
+            return True
+    return False
+
+
+def parse_local_spec(arg: str) -> LocalSpec:
+    resolved = Path(arg).expanduser()
+    if not resolved.is_absolute():
+        resolved = Path.cwd() / resolved
+    resolved = resolved.resolve()
+    if not resolved.is_dir():
+        die(f"local path {arg!r} is not a directory ({resolved})")
+    return LocalSpec(resolved)
 
 
 def gh_headers(accept: str | None = None) -> dict[str, str]:
@@ -206,11 +246,13 @@ def section_text(text: str, name: str) -> str | None:
     return rest[: next_section.start()] if next_section else rest
 
 
-def detect_target(spec: Spec, sha: str) -> Target:
-    deps_edn = fetch_file(spec, sha, "deps.edn")
-    package_json_text = fetch_file(spec, sha, "package.json")
-    pyproject_text = fetch_file(spec, sha, "pyproject.toml")
-
+def detect_target_from_manifests(
+    label: str,
+    deps_edn: str | None,
+    package_json_text: str | None,
+    pyproject_text: str | None,
+    clojure_coord: str,
+) -> Target:
     found: list[str] = []
     if deps_edn is not None:
         found.append("clojure")
@@ -219,9 +261,9 @@ def detect_target(spec: Spec, sha: str) -> Target:
     if pyproject_text is not None:
         found.append("python")
     if not found:
-        die(f"{spec.slug}@{sha[:7]} has no deps.edn, package.json, or pyproject.toml")
+        die(f"{label} has no deps.edn, package.json, or pyproject.toml")
     if len(found) > 1:
-        die(f"{spec.slug}@{sha[:7]} is ambiguous; found {', '.join(found)} manifests")
+        die(f"{label} is ambiguous; found {', '.join(found)} manifests")
 
     language = found[0]
     if language == "typescript":
@@ -231,14 +273,43 @@ def detect_target(spec: Spec, sha: str) -> Target:
             die(f"Invalid JSON in package.json: {exc}")
         name = pkg.get("name")
         if not name:
-            die(f"{spec.slug}@{sha[:7]} package.json has no name")
+            die(f"{label} package.json has no name")
         return Target("typescript", str(name))
     if language == "python":
         name = parse_pyproject_name(pyproject_text or "")
         if not name:
-            die(f"{spec.slug}@{sha[:7]} pyproject.toml has no [project].name")
+            die(f"{label} pyproject.toml has no [project].name")
         return Target("python", name)
-    return Target("clojure", f"io.github.{spec.owner}/{spec.repo}")
+    return Target("clojure", clojure_coord)
+
+
+def detect_target(spec: Spec, sha: str) -> Target:
+    return detect_target_from_manifests(
+        f"{spec.slug}@{sha[:7]}",
+        fetch_file(spec, sha, "deps.edn"),
+        fetch_file(spec, sha, "package.json"),
+        fetch_file(spec, sha, "pyproject.toml"),
+        f"io.github.{spec.owner}/{spec.repo}",
+    )
+
+
+def read_local_file(local: LocalSpec, file_path: str, *, required: bool = False) -> str | None:
+    f = local.path / file_path
+    if not f.is_file():
+        if required:
+            die(f"{local.path} has no {file_path}")
+        return None
+    return f.read_text()
+
+
+def detect_target_local(local: LocalSpec) -> Target:
+    return detect_target_from_manifests(
+        str(local.path),
+        read_local_file(local, "deps.edn"),
+        read_local_file(local, "package.json"),
+        read_local_file(local, "pyproject.toml"),
+        f"local/{local.name}",
+    )
 
 
 # --- native metadata ------------------------------------------------------
@@ -261,6 +332,8 @@ def metadata_from_package_json(file: Path) -> Metadata | None:
         language=bc.get("language", "typescript"),
         run=bc.get("run", "run"),
         package_name=bc.get("packageName"),
+        local=bool(bc.get("local")),
+        path=bc.get("path"),
         manifest=file,
     )
 
@@ -282,6 +355,8 @@ def metadata_from_pyproject(file: Path) -> Metadata | None:
                 language=tool.get("language", "python"),
                 run=tool.get("run", "run"),
                 package_name=tool.get("package-name"),
+                local=bool(tool.get("local")),
+                path=tool.get("path"),
                 manifest=file,
             )
     sec = section_text(text, "tool.bigconfig")
@@ -292,6 +367,7 @@ def metadata_from_pyproject(file: Path) -> Metadata | None:
         m = re.search(rf"^\s*{re.escape(key)}\s*=\s*[\"']([^\"']+)[\"']", sec, re.M)
         return m.group(1) if m else None
 
+    local = bool(re.search(r"^\s*local\s*=\s*true\s*$", sec, re.M))
     return Metadata(
         repo=get("repo"),
         ref=get("ref"),
@@ -299,6 +375,8 @@ def metadata_from_pyproject(file: Path) -> Metadata | None:
         language=get("language") or "python",
         run=get("run") or "run",
         package_name=get("package-name"),
+        local=local,
+        path=get("path"),
         manifest=file,
     )
 
@@ -307,7 +385,7 @@ def metadata_from_deps_edn(file: Path) -> Metadata | None:
     if not file.exists():
         return None
     text = file.read_text()
-    if ":bigconfig/repo" not in text:
+    if ":bigconfig/repo" not in text and ":bigconfig/path" not in text:
         return None
 
     def get(key: str) -> str | None:
@@ -320,6 +398,8 @@ def metadata_from_deps_edn(file: Path) -> Metadata | None:
         sha=get("bigconfig/sha"),
         language=get("bigconfig/language") or "clojure",
         run=get("bigconfig/run") or "run",
+        local=get("bigconfig/local") == "true",
+        path=get("bigconfig/path"),
         manifest=file,
     )
 
@@ -337,28 +417,61 @@ def read_metadata(cwd: Path | None = None) -> Metadata | None:
     if not metas:
         return None
     meta = metas[0]
-    if not meta.repo or not meta.ref or not meta.sha or not meta.language:
+    if meta.local:
+        if not meta.path or not meta.language:
+            die(f"Incomplete BigConfig metadata in {meta.manifest}")
+    elif not meta.repo or not meta.ref or not meta.sha or not meta.language:
         die(f"Incomplete BigConfig metadata in {meta.manifest}")
     return meta
 
 
 def validate_existing_metadata(meta: Metadata, spec: Spec, sha: str) -> None:
+    if meta.local:
+        die("Current directory is initialized for a local BigConfig package; refusing to switch to a GitHub package.")
     problems: list[str] = []
     if meta.repo != spec.slug:
         problems.append(f"repo {meta.repo!r} != {spec.slug!r}")
     if meta.ref != spec.ref:
         problems.append(f"ref {meta.ref!r} != {spec.ref!r}")
-    if meta.sha.lower() != sha.lower():
+    if (meta.sha or "").lower() != sha.lower():
         problems.append(f"sha {meta.sha} != {sha}")
     if problems:
         die("Current directory is already initialized for a different BigConfig package:\n  " + "\n  ".join(problems))
 
 
+def validate_existing_local_metadata(meta: Metadata, local: LocalSpec) -> None:
+    if not meta.local:
+        die("Current directory is initialized for a GitHub BigConfig package; refusing to switch to a local package.")
+    existing = Path(meta.path).resolve() if meta.path else None
+    if existing != local.path:
+        die(
+            "Current directory is already initialized for a different local BigConfig package:\n  "
+            f"path {meta.path!r} != {str(local.path)!r}"
+        )
+
+
+def _make_executable(target: Path) -> None:
+    if os.name != "nt":
+        target.chmod(target.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+
+
 def write_run_file(text: str) -> None:
     target = Path.cwd() / "run"
     target.write_text(text)
-    if os.name != "nt":
-        target.chmod(target.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+    _make_executable(target)
+
+
+def link_run_file(source: Path) -> None:
+    # Local targets symlink the run file so edits to the local package flow
+    # through; copy as a fallback where symlinks are unavailable.
+    target = Path.cwd() / "run"
+    if target.is_symlink() or target.exists():
+        target.unlink()
+    try:
+        target.symlink_to(source)
+    except OSError:
+        shutil.copy(source, target)
+        _make_executable(target)
 
 
 def clojure_coord(spec: Spec) -> str:
@@ -454,6 +567,91 @@ def write_native_manifest(spec: Spec, sha: str, target: Target) -> None:
         die(f"Unsupported language: {target.language}")
 
 
+# --- local (live) manifests -----------------------------------------------
+
+
+def write_clojure_manifest_local(local: LocalSpec, target: Target) -> None:
+    coord = target.package_name or f"local/{local.name}"
+    path = str(local.path)
+    deps = (
+        f'{{:deps {{{coord} {{:local/root "{path}"}}}}\n'
+        f' :bigconfig/local "true"\n'
+        f' :bigconfig/path "{path}"\n'
+        f' :bigconfig/language "clojure"\n'
+        f' :bigconfig/run "run"}}\n'
+    )
+    (Path.cwd() / "deps.edn").write_text(deps)
+
+    # Babashka reads bb.edn; metadata stays in deps.edn per the launcher contract.
+    bb = f'{{:deps {{{coord} {{:local/root "{path}"}}}}}}\n'
+    (Path.cwd() / "bb.edn").write_text(bb)
+
+
+def write_typescript_manifest_local(local: LocalSpec, target: Target) -> None:
+    file = Path.cwd() / "package.json"
+    if file.exists():
+        try:
+            pkg: dict[str, Any] = json.loads(file.read_text())
+        except json.JSONDecodeError as exc:
+            die(f"Invalid JSON in {file}: {exc}")
+        if pkg.get("bigconfig"):
+            validate_existing_local_metadata(metadata_from_package_json(file), local)  # type: ignore[arg-type]
+    else:
+        pkg = {}
+    package_name = target.package_name or local.name
+    pkg.setdefault("type", "module")
+    pkg["scripts"] = {**pkg.get("scripts", {}), "run": "node run"}
+    pkg["dependencies"] = {**pkg.get("dependencies", {}), package_name: f"file:{local.path}"}
+    pkg["bigconfig"] = {
+        "local": True,
+        "path": str(local.path),
+        "language": "typescript",
+        "run": "run",
+        "packageName": package_name,
+    }
+    file.write_text(json.dumps(pkg, indent=2) + "\n")
+
+
+def write_python_manifest_local(local: LocalSpec, target: Target) -> None:
+    file = Path.cwd() / "pyproject.toml"
+    if file.exists():
+        existing = metadata_from_pyproject(file)
+        if not existing:
+            die("pyproject.toml already exists and is not initialized for bc-pkg; refusing to rewrite it.")
+        validate_existing_local_metadata(existing, local)
+    package_name = target.package_name or local.name
+    path = str(local.path)
+    text = (
+        "[project]\n"
+        "name = \"bigconfig-cli\"\n"
+        "version = \"0.1.0\"\n"
+        "requires-python = \">=3.12\"\n"
+        "dependencies = [\n"
+        f"  {quote_toml(package_name)},\n"
+        "]\n\n"
+        "[tool.uv.sources]\n"
+        f"{quote_toml(package_name)} = {{ path = {quote_toml(path)}, editable = true }}\n\n"
+        "[tool.bigconfig]\n"
+        "local = true\n"
+        f"path = {quote_toml(path)}\n"
+        "language = \"python\"\n"
+        "run = \"run\"\n"
+        f"package-name = {quote_toml(package_name)}\n"
+    )
+    file.write_text(text)
+
+
+def write_native_manifest_local(local: LocalSpec, target: Target) -> None:
+    if target.language == "clojure":
+        write_clojure_manifest_local(local, target)
+    elif target.language == "typescript":
+        write_typescript_manifest_local(local, target)
+    elif target.language == "python":
+        write_python_manifest_local(local, target)
+    else:
+        die(f"Unsupported language: {target.language}")
+
+
 # --- target dependency setup and execution --------------------------------
 
 
@@ -474,18 +672,22 @@ def _python_site_packages_dirs() -> list[Path]:
     return result
 
 
-def _expose_python_resources() -> None:
-    # Python wheels can install templates as top-level package data under
+def _expose_python_resources(meta: Metadata | None = None) -> None:
+    # Python wheels install templates as top-level package data under
     # site-packages/resources; BigConfig's renderer resolves them from ./resources.
+    # For editable local installs the source tree is used instead (resources live
+    # under <path>/src/resources or <path>/resources, never in site-packages).
     target = Path.cwd() / "resources"
     if target.exists():
         return
     if target.is_symlink():
         target.unlink()
-    source = next(
-        (site / "resources" for site in _python_site_packages_dirs() if (site / "resources").is_dir()),
-        None,
-    )
+    candidates: list[Path] = []
+    if meta is not None and meta.local and meta.path:
+        base = Path(meta.path)
+        candidates.extend([base / "src" / "resources", base / "resources"])
+    candidates.extend(site / "resources" for site in _python_site_packages_dirs())
+    source = next((c for c in candidates if c.is_dir()), None)
     if source is None:
         return
     try:
@@ -512,7 +714,7 @@ def ensure_target_deps(meta: Metadata) -> None:
             code = run_command("uv", ["sync"])
             if code != 0:
                 raise SystemExit(code)
-        _expose_python_resources()
+        _expose_python_resources(meta)
 
 
 def run_target(meta: Metadata, args: list[str]) -> int:
@@ -540,13 +742,45 @@ def initialize(spec: Spec, sha: str) -> Metadata:
     return Metadata(spec.slug, spec.ref, sha, target.language, "run", target.package_name)
 
 
+def initialize_local(local: LocalSpec) -> Metadata:
+    if local.path == Path.cwd().resolve():
+        die(
+            "local path is the current directory; run bc-pkg from a separate directory "
+            "so it does not overwrite the package's own manifest."
+        )
+    target = detect_target_local(local)
+    run_source = local.path / "run"
+    if not run_source.is_file():
+        die(f"{local.path} has no run")
+    link_run_file(run_source)
+    write_native_manifest_local(local, target)
+    return Metadata(
+        repo=None,
+        ref=None,
+        sha=None,
+        language=target.language,
+        run="run",
+        package_name=target.package_name,
+        local=True,
+        path=str(local.path),
+    )
+
+
 def restore_run_if_missing(meta: Metadata) -> None:
     run_path = Path.cwd() / meta.run
     if run_path.exists():
         return
+    if meta.local:
+        assert meta.path is not None
+        source = Path(meta.path) / meta.run
+        if not source.is_file():
+            die(f"{meta.path} has no {meta.run}")
+        link_run_file(source)
+        return
+    assert meta.repo is not None
     owner, repo = meta.repo.split("/", 1)
-    spec = Spec(owner, repo, meta.ref)
-    run_text = fetch_file(spec, meta.sha, "run", required=True)
+    spec = Spec(owner, repo, meta.ref or "")
+    run_text = fetch_file(spec, meta.sha or "", "run", required=True)
     assert run_text is not None
     write_run_file(run_text)
 
@@ -768,12 +1002,19 @@ def run_bb(bb_path: Path, args: list[str], java_home: Path) -> int:
 
 def main_star(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
-    spec = parse_spec(args[0]) if args else None
-    if spec:
+    first = args[0] if args else None
+    local_spec = parse_local_spec(first) if first is not None and is_local_spec(first) else None
+    spec = parse_spec(first) if local_spec is None else None
+    if local_spec or spec:
         args = args[1:]
 
     meta = read_metadata()
-    if spec:
+    if local_spec:
+        if meta:
+            validate_existing_local_metadata(meta, local_spec)
+        else:
+            meta = initialize_local(local_spec)
+    elif spec:
         sha = resolve_ref(spec)
         if meta:
             validate_existing_metadata(meta, spec, sha)

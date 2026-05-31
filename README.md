@@ -24,6 +24,36 @@ uvx bc-pkg bigconfig-ai/once@2f4e8c0d0b4c4b8f0c3a9f6e2a1b5c7d8e9f0123 package va
 On the first run, `bc-pkg` resolves the ref to a full SHA and pins it. Later
 runs omit `<owner/repo@ref>` and keep using the pinned SHA.
 
+## Local repositories
+
+For live local development you can point `bc-pkg` at a local checkout of a
+target package instead of a GitHub spec. The first argument is treated as a
+local path when it starts with `/`, `./`, `../`, `~`, or is `.`/`..`:
+
+```sh
+uvx bc-pkg ../once/python package build
+uvx bc-pkg /abs/path/to/once/clojure package build
+```
+
+Local targets are wired up **live** — your uncommitted edits in the local
+package are picked up on the next run, with no SHA pinning and no push:
+
+| Target language | Local dependency |
+| --- | --- |
+| Clojure | `deps.edn` / `bb.edn` use `:local/root` |
+| TypeScript | `package.json` uses a `file:` dependency |
+| Python | `pyproject.toml` uses an editable `[tool.uv.sources]` path |
+
+The `run` file is symlinked (not copied) so run-file edits are also live. Run
+`bc-pkg` from a **separate** directory; pointing it at the current directory is
+refused so it never overwrites the package's own manifest. Switching an
+initialized directory between local and GitHub (or to a different local path) is
+a hard error, just like a repo/ref/SHA mismatch.
+
+Notes: TypeScript local dev requires the local package to be built (its
+`dist/`); Python local dev installs the package editable and exposes its
+`resources/` from the source tree.
+
 ## What is created
 
 The launcher copies the target package's root `run` file into the current
