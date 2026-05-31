@@ -27,7 +27,7 @@ function fail(msg) {
 }
 
 function usage() {
-  return `Usage:\n  bc-pkg <owner/repo@ref> <args...>\n  bc-pkg <args...>\n\nExamples:\n  npx bc-pkg bigconfig-ai/once@typescript package validate\n  npx bc-pkg package validate`;
+  return `Usage:\n  bc-pkg <owner/repo@ref> <args...>\n  bc-pkg <local-path> <args...>\n  bc-pkg <args...>\n\nExamples:\n  npx bc-pkg bigconfig-ai/once@typescript package validate\n  npx bc-pkg ../once/typescript package validate\n  npx bc-pkg package validate`;
 }
 
 // --- generic process helpers -------------------------------------------
@@ -88,6 +88,37 @@ function parseSpec(arg) {
   const m = arg && arg.match(SPEC_RE);
   if (!m) return null;
   return { owner: m[1], repo: m[2], ref: m[3], slug: `${m[1]}/${m[2]}` };
+}
+
+// A normal local path: leading slash, dot-slash, or tilde. Bare names with no
+// path prefix are treated as forwarded args, not local targets.
+function isLocalSpec(arg) {
+  if (!arg) return false;
+  if (arg === '.' || arg === '..') return true;
+  if (arg.startsWith('/') || arg.startsWith('~') || arg.startsWith('./') || arg.startsWith('../')) return true;
+  if (process.platform === 'win32') {
+    if (arg.startsWith('.\\') || arg.startsWith('..\\') || arg.startsWith('\\')) return true;
+    if (/^[A-Za-z]:[\\/]/.test(arg)) return true;
+  }
+  return false;
+}
+
+function parseLocalSpec(arg) {
+  let p = arg;
+  if (p === '~' || p.startsWith('~/') || p.startsWith('~\\')) {
+    p = path.join(os.homedir(), p.slice(1));
+  }
+  const abs = path.resolve(process.cwd(), p);
+  let resolved;
+  try {
+    resolved = fs.realpathSync(abs);
+  } catch {
+    fail(`local path ${JSON.stringify(arg)} is not a directory (${abs})`);
+  }
+  if (!fs.statSync(resolved).isDirectory()) {
+    fail(`local path ${JSON.stringify(arg)} is not a directory (${resolved})`);
+  }
+  return { path: resolved, name: path.basename(resolved) };
 }
 
 function ghHeaders(accept) {
@@ -160,35 +191,63 @@ function sectionText(text, name) {
   return next ? rest.slice(0, next.index) : rest;
 }
 
+function detectTargetFromManifests(label, depsEdn, packageJsonText, pyprojectText, clojureCoord) {
+  const found = [];
+  if (depsEdn != null) found.push('clojure');
+  if (packageJsonText != null) found.push('typescript');
+  if (pyprojectText != null) found.push('python');
+  if (found.length === 0) {
+    fail(`${label} has no deps.edn, package.json, or pyproject.toml`);
+  }
+  if (found.length > 1) {
+    fail(`${label} is ambiguous; found ${found.join(', ')} manifests`);
+  }
+
+  if (found[0] === 'typescript') {
+    const pkg = parseJson(packageJsonText, 'package.json');
+    if (!pkg.name) fail(`${label} package.json has no name`);
+    return { language: 'typescript', packageName: pkg.name };
+  }
+  if (found[0] === 'python') {
+    const packageName = parsePyProjectName(pyprojectText);
+    if (!packageName) fail(`${label} pyproject.toml has no [project].name`);
+    return { language: 'python', packageName };
+  }
+  return { language: 'clojure', packageName: clojureCoord };
+}
+
 async function detectTarget(spec, sha) {
   const [depsEdn, packageJsonText, pyprojectText] = await Promise.all([
     fetchFile(spec, sha, 'deps.edn'),
     fetchFile(spec, sha, 'package.json'),
     fetchFile(spec, sha, 'pyproject.toml'),
   ]);
+  return detectTargetFromManifests(
+    `${spec.slug}@${sha.slice(0, 7)}`,
+    depsEdn,
+    packageJsonText,
+    pyprojectText,
+    `io.github.${spec.owner}/${spec.repo}`,
+  );
+}
 
-  const found = [];
-  if (depsEdn != null) found.push('clojure');
-  if (packageJsonText != null) found.push('typescript');
-  if (pyprojectText != null) found.push('python');
-  if (found.length === 0) {
-    fail(`${spec.slug}@${sha.slice(0, 7)} has no deps.edn, package.json, or pyproject.toml`);
+function readLocalFile(local, filePath, { required = false } = {}) {
+  const f = path.join(local.path, filePath);
+  if (!fs.existsSync(f) || !fs.statSync(f).isFile()) {
+    if (required) fail(`${local.path} has no ${filePath}`);
+    return null;
   }
-  if (found.length > 1) {
-    fail(`${spec.slug}@${sha.slice(0, 7)} is ambiguous; found ${found.join(', ')} manifests`);
-  }
+  return fs.readFileSync(f, 'utf8');
+}
 
-  if (found[0] === 'typescript') {
-    const pkg = parseJson(packageJsonText, 'package.json');
-    if (!pkg.name) fail(`${spec.slug}@${sha.slice(0, 7)} package.json has no name`);
-    return { language: 'typescript', packageName: pkg.name };
-  }
-  if (found[0] === 'python') {
-    const packageName = parsePyProjectName(pyprojectText);
-    if (!packageName) fail(`${spec.slug}@${sha.slice(0, 7)} pyproject.toml has no [project].name`);
-    return { language: 'python', packageName };
-  }
-  return { language: 'clojure', packageName: `io.github.${spec.owner}/${spec.repo}` };
+function detectTargetLocal(local) {
+  return detectTargetFromManifests(
+    local.path,
+    readLocalFile(local, 'deps.edn'),
+    readLocalFile(local, 'package.json'),
+    readLocalFile(local, 'pyproject.toml'),
+    `local/${local.name}`,
+  );
 }
 
 // --- native metadata -----------------------------------------------------
@@ -216,6 +275,8 @@ function metadataFromPyproject(file) {
     language: get('language') || 'python',
     run: get('run') || 'run',
     packageName: get('package-name'),
+    local: /^\s*local\s*=\s*true\s*$/m.test(sec),
+    path: get('path'),
     manifest: file,
   };
 }
@@ -223,7 +284,7 @@ function metadataFromPyproject(file) {
 function metadataFromDepsEdn(file) {
   if (!fs.existsSync(file)) return null;
   const text = fs.readFileSync(file, 'utf8');
-  if (!text.includes(':bigconfig/repo')) return null;
+  if (!text.includes(':bigconfig/repo') && !text.includes(':bigconfig/path')) return null;
   const get = (key) => {
     const m = text.match(new RegExp(`:${key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s+"([^"]+)"`));
     return m ? m[1] : undefined;
@@ -234,6 +295,8 @@ function metadataFromDepsEdn(file) {
     sha: get('bigconfig/sha'),
     language: get('bigconfig/language') || 'clojure',
     run: get('bigconfig/run') || 'run',
+    local: get('bigconfig/local') === 'true',
+    path: get('bigconfig/path'),
     manifest: file,
   };
 }
@@ -249,13 +312,18 @@ function readMetadata(cwd = process.cwd()) {
   }
   if (metas.length === 0) return null;
   const meta = metas[0];
-  if (!meta.repo || !meta.ref || !meta.sha || !meta.language) {
+  if (meta.local) {
+    if (!meta.path || !meta.language) fail(`Incomplete BigConfig metadata in ${meta.manifest}`);
+  } else if (!meta.repo || !meta.ref || !meta.sha || !meta.language) {
     fail(`Incomplete BigConfig metadata in ${meta.manifest}`);
   }
   return meta;
 }
 
 function validateExistingMetadata(meta, spec, sha) {
+  if (meta.local) {
+    fail('Current directory is initialized for a local BigConfig package; refusing to switch to a GitHub package.');
+  }
   const expectedRepo = spec.slug;
   const problems = [];
   if (meta.repo !== expectedRepo) problems.push(`repo ${JSON.stringify(meta.repo)} != ${JSON.stringify(expectedRepo)}`);
@@ -263,6 +331,23 @@ function validateExistingMetadata(meta, spec, sha) {
   if (String(meta.sha).toLowerCase() !== sha.toLowerCase()) problems.push(`sha ${meta.sha} != ${sha}`);
   if (problems.length) {
     fail(`Current directory is already initialized for a different BigConfig package:\n  ${problems.join('\n  ')}`);
+  }
+}
+
+function validateExistingLocalMetadata(meta, local) {
+  if (!meta.local) {
+    fail('Current directory is initialized for a GitHub BigConfig package; refusing to switch to a local package.');
+  }
+  let existing = null;
+  if (meta.path) {
+    try {
+      existing = fs.realpathSync(meta.path);
+    } catch {
+      existing = path.resolve(meta.path);
+    }
+  }
+  if (existing !== local.path) {
+    fail(`Current directory is already initialized for a different local BigConfig package:\n  path ${JSON.stringify(meta.path)} != ${JSON.stringify(local.path)}`);
   }
 }
 
@@ -274,6 +359,24 @@ function writeRunFile(text) {
   const target = path.join(process.cwd(), 'run');
   fs.writeFileSync(target, text);
   if (process.platform !== 'win32') fs.chmodSync(target, 0o755);
+}
+
+// Local targets symlink the run file so edits to the local package flow through;
+// copy as a fallback where symlinks are unavailable.
+function linkRunFile(source) {
+  const target = path.join(process.cwd(), 'run');
+  try {
+    fs.lstatSync(target);
+    fs.rmSync(target, { force: true });
+  } catch {
+    // nothing to remove
+  }
+  try {
+    fs.symlinkSync(source, target);
+  } catch {
+    fs.copyFileSync(source, target);
+    if (process.platform !== 'win32') fs.chmodSync(target, 0o755);
+  }
 }
 
 function clojureCoord(spec) {
@@ -335,7 +438,132 @@ function writeNativeManifest(spec, sha, target) {
   fail(`Unsupported language: ${target.language}`);
 }
 
+// --- local (live) manifests ----------------------------------------------
+
+function writeClojureManifestLocal(local, target) {
+  const coord = target.packageName || `local/${local.name}`;
+  const p = local.path;
+  const deps = `{:deps {${coord} {:local/root "${p}"}}\n :bigconfig/local "true"\n :bigconfig/path "${p}"\n :bigconfig/language "clojure"\n :bigconfig/run "run"}\n`;
+  fs.writeFileSync(path.join(process.cwd(), 'deps.edn'), deps);
+
+  // Babashka reads bb.edn; metadata stays in deps.edn per the launcher contract.
+  const bb = `{:deps {${coord} {:local/root "${p}"}}}\n`;
+  fs.writeFileSync(path.join(process.cwd(), 'bb.edn'), bb);
+}
+
+function writeTypeScriptManifestLocal(local, target) {
+  const file = path.join(process.cwd(), 'package.json');
+  let pkg = {};
+  if (fs.existsSync(file)) {
+    pkg = parseJson(fs.readFileSync(file, 'utf8'), file);
+    if (pkg.bigconfig) validateExistingLocalMetadata(metadataFromPackageJson(file), local);
+  }
+  const packageName = target.packageName || local.name;
+  pkg.type = pkg.type || 'module';
+  pkg.scripts = { ...(pkg.scripts || {}), run: 'node run' };
+  pkg.dependencies = { ...(pkg.dependencies || {}) };
+  pkg.dependencies[packageName] = `file:${local.path}`;
+  pkg.bigconfig = {
+    local: true,
+    path: local.path,
+    language: 'typescript',
+    run: 'run',
+    packageName,
+  };
+  fs.writeFileSync(file, `${JSON.stringify(pkg, null, 2)}\n`);
+}
+
+function writePythonManifestLocal(local, target) {
+  const file = path.join(process.cwd(), 'pyproject.toml');
+  if (fs.existsSync(file)) {
+    const existing = metadataFromPyproject(file);
+    if (!existing) {
+      fail('pyproject.toml already exists and is not initialized for bc-pkg; refusing to rewrite it.');
+    }
+    validateExistingLocalMetadata(existing, local);
+  }
+  const packageName = target.packageName || local.name;
+  const text = `[project]\nname = "bigconfig-cli"\nversion = "0.1.0"\nrequires-python = ">=3.12"\ndependencies = [\n  ${quoteToml(packageName)},\n]\n\n[tool.uv.sources]\n${quoteToml(packageName)} = { path = ${quoteToml(local.path)}, editable = true }\n\n[tool.bigconfig]\nlocal = true\npath = ${quoteToml(local.path)}\nlanguage = "python"\nrun = "run"\npackage-name = ${quoteToml(packageName)}\n`;
+  fs.writeFileSync(file, text);
+}
+
+function writeNativeManifestLocal(local, target) {
+  if (target.language === 'clojure') return writeClojureManifestLocal(local, target);
+  if (target.language === 'typescript') return writeTypeScriptManifestLocal(local, target);
+  if (target.language === 'python') return writePythonManifestLocal(local, target);
+  fail(`Unsupported language: ${target.language}`);
+}
+
 // --- target dependency setup and execution -------------------------------
+
+function pythonSitePackagesDirs() {
+  const venv = path.join(process.cwd(), '.venv');
+  const candidates = [path.join(venv, 'Lib', 'site-packages')];
+  for (const libName of ['lib', 'lib64']) {
+    const libDir = path.join(venv, libName);
+    let entries = [];
+    try {
+      entries = fs.readdirSync(libDir);
+    } catch {
+      entries = [];
+    }
+    for (const e of entries.sort()) {
+      if (e.startsWith('python')) candidates.push(path.join(libDir, e, 'site-packages'));
+    }
+  }
+  const seen = new Set();
+  const result = [];
+  for (const c of candidates) {
+    if (seen.has(c)) continue;
+    seen.add(c);
+    try {
+      if (fs.statSync(c).isDirectory()) result.push(c);
+    } catch {
+      // not present
+    }
+  }
+  return result;
+}
+
+// Python wheels install templates as top-level package data under
+// site-packages/resources; BigConfig's renderer resolves them from ./resources.
+// For editable local installs the source tree is used instead (resources live
+// under <path>/src/resources or <path>/resources, never in site-packages).
+function exposePythonResources(meta) {
+  const target = path.join(process.cwd(), 'resources');
+  try {
+    if (fs.statSync(target)) return;
+  } catch {
+    // not present; continue
+  }
+  try {
+    if (fs.lstatSync(target)) fs.rmSync(target, { force: true, recursive: true });
+  } catch {
+    // nothing to remove (e.g. broken symlink already gone)
+  }
+  const candidates = [];
+  if (meta && meta.local && meta.path) {
+    candidates.push(path.join(meta.path, 'src', 'resources'), path.join(meta.path, 'resources'));
+  }
+  for (const site of pythonSitePackagesDirs()) candidates.push(path.join(site, 'resources'));
+  let source = null;
+  for (const c of candidates) {
+    try {
+      if (fs.statSync(c).isDirectory()) {
+        source = c;
+        break;
+      }
+    } catch {
+      // not a dir
+    }
+  }
+  if (!source) return;
+  try {
+    fs.symlinkSync(source, target, 'dir');
+  } catch {
+    fs.cpSync(source, target, { recursive: true });
+  }
+}
 
 async function ensureTargetDeps(meta) {
   if (meta.language === 'typescript') {
@@ -357,6 +585,7 @@ async function ensureTargetDeps(meta) {
       const code = await runCommand('uv', ['sync']);
       if (code !== 0) process.exit(code);
     }
+    exposePythonResources(meta);
     return;
   }
 }
@@ -395,9 +624,36 @@ async function initialize(spec, sha) {
   };
 }
 
+function initializeLocal(local) {
+  if (local.path === fs.realpathSync(process.cwd())) {
+    fail("local path is the current directory; run bc-pkg from a separate directory so it does not overwrite the package's own manifest.");
+  }
+  const target = detectTargetLocal(local);
+  const runSource = path.join(local.path, 'run');
+  if (!fs.existsSync(runSource) || !fs.statSync(runSource).isFile()) fail(`${local.path} has no run`);
+  linkRunFile(runSource);
+  writeNativeManifestLocal(local, target);
+  return {
+    repo: null,
+    ref: null,
+    sha: null,
+    language: target.language,
+    run: 'run',
+    packageName: target.packageName,
+    local: true,
+    path: local.path,
+  };
+}
+
 async function restoreRunIfMissing(meta) {
   const runPath = path.join(process.cwd(), meta.run || 'run');
   if (fs.existsSync(runPath)) return;
+  if (meta.local) {
+    const source = path.join(meta.path, meta.run || 'run');
+    if (!fs.existsSync(source)) fail(`${meta.path} has no ${meta.run || 'run'}`);
+    linkRunFile(source);
+    return;
+  }
   const [owner, repo] = meta.repo.split('/');
   const spec = { owner, repo, slug: meta.repo, ref: meta.ref };
   const runText = await fetchFile(spec, meta.sha, 'run', { required: true });
@@ -652,11 +908,19 @@ function runBb(bbPath, args, javaHome, extraEnv = {}) {
 
 async function main(argv) {
   let args = [...argv];
-  let spec = args.length ? parseSpec(args[0]) : null;
-  if (spec) args = args.slice(1);
+  const first = args.length ? args[0] : null;
+  const localSpec = first != null && isLocalSpec(first) ? parseLocalSpec(first) : null;
+  const spec = localSpec ? null : first ? parseSpec(first) : null;
+  if (localSpec || spec) args = args.slice(1);
 
   let meta = readMetadata();
-  if (spec) {
+  if (localSpec) {
+    if (meta) {
+      validateExistingLocalMetadata(meta, localSpec);
+    } else {
+      meta = initializeLocal(localSpec);
+    }
+  } else if (spec) {
     const sha = await resolveRef(spec);
     if (meta) {
       validateExistingMetadata(meta, spec, sha);
@@ -681,10 +945,14 @@ if (require.main === module) {
 
 module.exports = {
   parseSpec,
+  isLocalSpec,
+  parseLocalSpec,
   resolveRef,
   detectTarget,
+  detectTargetLocal,
   readMetadata,
   validateExistingMetadata,
+  validateExistingLocalMetadata,
   resolvePlatform,
   cacheRoot,
   findJavaHome,
