@@ -496,75 +496,6 @@ function writeNativeManifestLocal(local, target) {
 
 // --- target dependency setup and execution -------------------------------
 
-function pythonSitePackagesDirs() {
-  const venv = path.join(process.cwd(), '.venv');
-  const candidates = [path.join(venv, 'Lib', 'site-packages')];
-  for (const libName of ['lib', 'lib64']) {
-    const libDir = path.join(venv, libName);
-    let entries = [];
-    try {
-      entries = fs.readdirSync(libDir);
-    } catch {
-      entries = [];
-    }
-    for (const e of entries.sort()) {
-      if (e.startsWith('python')) candidates.push(path.join(libDir, e, 'site-packages'));
-    }
-  }
-  const seen = new Set();
-  const result = [];
-  for (const c of candidates) {
-    if (seen.has(c)) continue;
-    seen.add(c);
-    try {
-      if (fs.statSync(c).isDirectory()) result.push(c);
-    } catch {
-      // not present
-    }
-  }
-  return result;
-}
-
-// Python wheels install templates as top-level package data under
-// site-packages/resources; BigConfig's renderer resolves them from ./resources.
-// For editable local installs the source tree is used instead (resources live
-// under <path>/src/resources or <path>/resources, never in site-packages).
-function exposePythonResources(meta) {
-  const target = path.join(process.cwd(), 'resources');
-  try {
-    if (fs.statSync(target)) return;
-  } catch {
-    // not present; continue
-  }
-  try {
-    if (fs.lstatSync(target)) fs.rmSync(target, { force: true, recursive: true });
-  } catch {
-    // nothing to remove (e.g. broken symlink already gone)
-  }
-  const candidates = [];
-  if (meta && meta.local && meta.path) {
-    candidates.push(path.join(meta.path, 'src', 'resources'), path.join(meta.path, 'resources'));
-  }
-  for (const site of pythonSitePackagesDirs()) candidates.push(path.join(site, 'resources'));
-  let source = null;
-  for (const c of candidates) {
-    try {
-      if (fs.statSync(c).isDirectory()) {
-        source = c;
-        break;
-      }
-    } catch {
-      // not a dir
-    }
-  }
-  if (!source) return;
-  try {
-    fs.symlinkSync(source, target, 'dir');
-  } catch {
-    fs.cpSync(source, target, { recursive: true });
-  }
-}
-
 async function ensureTargetDeps(meta) {
   if (meta.language === 'typescript') {
     requireCommand('node', 'Install Node.js and try again.');
@@ -585,7 +516,6 @@ async function ensureTargetDeps(meta) {
       const code = await runCommand('uv', ['sync']);
       if (code !== 0) process.exit(code);
     }
-    exposePythonResources(meta);
     return;
   }
 }

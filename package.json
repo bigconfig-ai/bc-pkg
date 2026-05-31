@@ -1,6 +1,6 @@
 {
   "name": "bc-pkg",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Create and run a BigConfig CLI from a language-specific GitHub package.",
   "bin": {
     "bc-pkg": "bin/bc-pkg.js"

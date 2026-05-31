@@ -51,8 +51,9 @@ initialized directory between local and GitHub (or to a different local path) is
 a hard error, just like a repo/ref/SHA mismatch.
 
 Notes: TypeScript local dev requires the local package to be built (its
-`dist/`); Python local dev installs the package editable and exposes its
-`resources/` from the source tree.
+`dist/`); Python local dev installs the package editable. Python template data
+ships as a top-level `resources` package, which BigConfig's renderer resolves
+through `importlib.resources`, so no `./resources` directory is created.
 
 ## What is created
 

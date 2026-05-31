@@ -59,7 +59,7 @@ There is no test suite. Behavioural parity with `launcher/python` is verified by
 5. **Re-entry**: `readMetadata` parses the manifest's `bigconfig` block (regex-only — there is no TOML parser in core Node, so don't reach for one). Its completeness check branches on the `local` marker (local requires `path` + `language`; GitHub requires `repo`/`ref`/`sha` + `language`). If an `owner/repo@ref` is also passed, `validateExistingMetadata` requires repo/ref/sha to match; if a local path is passed, `validateExistingLocalMetadata` requires the resolved path to match. Switching between local and GitHub (or to a different local path) is a hard error, not an implicit update.
 6. **Run** (`runTarget`):
    - TS → `npm install` if `node_modules/` missing, then `node run <args>`.
-   - Python → `uv sync` if `.venv/` missing, then `uv run python run <args>`, then `exposePythonResources(meta)` symlinks (or copies) `resources/` to `./resources` — from `.venv/.../site-packages/resources` for wheel installs, or from the local source tree (`<path>/src/resources` or `<path>/resources`) for editable local targets. (Mirrors the Python launcher's `_expose_python_resources`; keep parity.)
+   - Python → `uv sync` if `.venv/` missing, then `uv run python run <args>`. No `./resources` exposure step is needed: template data ships as a top-level `resources` package (force-included into the wheel, and importable from the editable source tree for local targets), and BigConfig's renderer resolves it through `importlib.resources`.
    - Clojure → resolve platform, download pinned Babashka (`BB_VERSION`, default `1.12.196`) and Temurin JDK (`JDK_VERSION`, default `21`) into `cacheRoot()/bb/<v>` and `cacheRoot()/jdk/<v>`, ensure `git` is on PATH (auto-installs via apt/dnf/yum/zypper/pacman/apk on Linux with `sudo` when needed), then exec `bb run <args>` with `JAVA_HOME` and the JDK + bb dirs prepended to `PATH`.
 7. **`run` file restoration**: if `meta.run` is missing on re-entry, refetch it from the pinned SHA before forwarding.
 
@@ -96,7 +96,7 @@ These two launchers must stay equivalent. When changing one, mirror the other in
 | Default `BB_VERSION`, `JDK_VERSION` | Constants at top of `bc-pkg.js` / `cli.py` |
 | Git auto-install matrix (Linux only) | `ensureGit` in both |
 | Re-init error semantics | `validateExistingMetadata` + `validateExistingLocalMetadata` in both |
-| Python `resources/` exposure (incl. editable layout) | `exposePythonResources` / `_expose_python_resources` in both |
+| Python template data resolution | None — the renderer resolves the `resources` package via `importlib.resources`, so neither launcher exposes a `./resources` directory (drop `exposePythonResources` in `launcher/typescript` for parity) |
 
 If you find a behavioural divergence, treat it as a bug.
 
