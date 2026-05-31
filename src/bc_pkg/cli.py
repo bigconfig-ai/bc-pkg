@@ -655,47 +655,6 @@ def write_native_manifest_local(local: LocalSpec, target: Target) -> None:
 # --- target dependency setup and execution --------------------------------
 
 
-def _python_site_packages_dirs() -> list[Path]:
-    venv = Path.cwd() / ".venv"
-    candidates = [venv / "Lib" / "site-packages"]
-    for lib_dir_name in ("lib", "lib64"):
-        lib_dir = venv / lib_dir_name
-        if lib_dir.exists():
-            candidates.extend(sorted(lib_dir.glob("python*/site-packages")))
-    seen: set[str] = set()
-    result: list[Path] = []
-    for candidate in candidates:
-        key = str(candidate)
-        if key not in seen and candidate.is_dir():
-            result.append(candidate)
-            seen.add(key)
-    return result
-
-
-def _expose_python_resources(meta: Metadata | None = None) -> None:
-    # Python wheels install templates as top-level package data under
-    # site-packages/resources; BigConfig's renderer resolves them from ./resources.
-    # For editable local installs the source tree is used instead (resources live
-    # under <path>/src/resources or <path>/resources, never in site-packages).
-    target = Path.cwd() / "resources"
-    if target.exists():
-        return
-    if target.is_symlink():
-        target.unlink()
-    candidates: list[Path] = []
-    if meta is not None and meta.local and meta.path:
-        base = Path(meta.path)
-        candidates.extend([base / "src" / "resources", base / "resources"])
-    candidates.extend(site / "resources" for site in _python_site_packages_dirs())
-    source = next((c for c in candidates if c.is_dir()), None)
-    if source is None:
-        return
-    try:
-        target.symlink_to(source, target_is_directory=True)
-    except OSError:
-        shutil.copytree(source, target)
-
-
 def ensure_target_deps(meta: Metadata) -> None:
     if meta.language == "typescript":
         require_command("node", "Install Node.js and try again.")
@@ -714,7 +673,6 @@ def ensure_target_deps(meta: Metadata) -> None:
             code = run_command("uv", ["sync"])
             if code != 0:
                 raise SystemExit(code)
-        _expose_python_resources(meta)
 
 
 def run_target(meta: Metadata, args: list[str]) -> int:
