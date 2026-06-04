@@ -62,7 +62,7 @@ There is no test suite. Behavioural parity with `launcher/typescript` is verifie
 5. **Re-entry**: `read_metadata` parses the manifest's `bigconfig` block (preferring `tomllib` for pyproject; falling back to regex). Its completeness check branches on the `local` marker (local requires `path` + `language`; GitHub requires `repo`/`ref`/`sha` + `language`). If an `owner/repo@ref` is also passed, `validate_existing_metadata` requires repo/ref/sha to match; if a local path is passed, `validate_existing_local_metadata` requires the resolved path to match. Switching between local and GitHub (or to a different local path) is a hard error, not an implicit update.
 6. **Run** (`run_target`):
    - TS → `npm install` if `node_modules/` missing, then `node run <args>`.
-   - Python → `uv sync` if `.venv/` missing, then `uv run python run <args>`. No `./resources` exposure step is needed: template data ships as a top-level `resources` package (force-included into the wheel, and importable from the editable source tree for local targets), and BigConfig's renderer resolves it through `importlib.resources`.
+   - Python → `uv sync` if `.venv/` missing, then `uv run python run <args>`. No `./resources` exposure step is needed: template data ships as a top-level `resources` package (force-included into the wheel, and importable from the editable source tree for local targets), and the BigConfig SDK renderer resolves it through `importlib.resources`.
    - Clojure → resolve platform, download pinned Babashka (`BB_VERSION`, default `1.12.196`) and Temurin JDK (`JDK_VERSION`, default `21`) into `cache_root()/bb/<v>` and `cache_root()/jdk/<v>`, ensure `git` is on PATH (auto-installs via apt/dnf/yum/zypper/pacman/apk on Linux with `sudo` when needed), then exec `bb run <args>` with `JAVA_HOME` and the JDK + bb dirs prepended to `PATH`.
 7. **`run` file restoration**: if `meta.run` is missing on re-entry, refetch it from the pinned SHA before forwarding.
 
@@ -106,7 +106,7 @@ If you find a behavioural divergence, treat it as a bug.
 ## What to Avoid
 
 - Do not add runtime dependencies. Stdlib only.
-- Do not import from `big-config` / `once` / `selmer` — the launcher is independent of the BigConfig library chain.
+- Do not import from `big-config` / `once` / `selmer` — the launcher is independent of the BigConfig SDK library chain.
 - Do not change the on-disk artifact shape without also updating `launcher/typescript`.
 - Do not silently auto-upgrade an initialised directory; mismatched repo/ref/sha (or local path, or local↔GitHub switch) is a hard error.
 - Do not let a local target overwrite the package's own manifest: refuse when the resolved local path equals cwd. Local `run` files are symlinked, not copied.
